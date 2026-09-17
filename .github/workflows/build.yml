@@ -35,18 +35,17 @@ jobs:
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Busca qualquer imagem descompactada dentro do www/
-          ICON=$(find www -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" \) | head -n 1)
-          
-          echo "Imagem de ícone encontrada: $ICON"
+          # 2. APAGA o ícone adaptativo em XML padrão do Capacitor para forçar o uso do PNG
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
 
-          # 3. Copia a imagem sobrescrevendo diretamente os ícones padrões do Android
+          # 3. Localiza e copia a imagem para todas as resoluções de ícones
+          ICON=$(find www -type f \( -iname "planta-cobra.png" -o -iname "*.png" \) | head -n 1)
+
           if [ -n "$ICON" ]; then
             for dir in android/app/src/main/res/mipmap-*; do
               if [ -d "$dir" ]; then
                 cp "$ICON" "$dir/ic_launcher.png"
                 cp "$ICON" "$dir/ic_launcher_round.png"
-                cp "$ICON" "$dir/ic_launcher_foreground.png"
               fi
             done
           fi
