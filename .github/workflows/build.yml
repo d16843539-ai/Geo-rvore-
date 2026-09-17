@@ -36,7 +36,7 @@ jobs:
 
 
       # ==========================================
-      # 3. NODE.JS
+      # 3. NODE
       # ==========================================
 
       - name: Setup Node
@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
 
-          echo "Arquivos do repositório:"
+          echo "Arquivos encontrados:"
           find . -maxdepth 2 -type f | sort
 
           echo ""
@@ -68,12 +68,12 @@ jobs:
             exit 1
           fi
 
-          echo "app.zip encontrado!"
-          echo "planta-cobra.png encontrado!"
+          echo "OK: app.zip encontrado."
+          echo "OK: planta-cobra.png encontrado."
 
 
       # ==========================================
-      # 5. EXTRAIR APP.ZIP
+      # 5. EXTRAIR SITE
       # ==========================================
 
       - name: Extract App
@@ -86,15 +86,15 @@ jobs:
           unzip -o app.zip -d www/
 
           echo ""
-          echo "Conteúdo do aplicativo:"
+          echo "Arquivos do aplicativo:"
           find www -type f | sort
 
 
       # ==========================================
-      # 6. INICIALIZAR NPM
+      # 6. NPM
       # ==========================================
 
-      - name: Initialize Node Project
+      - name: Initialize Node
         shell: bash
         run: |
 
@@ -102,7 +102,7 @@ jobs:
 
 
       # ==========================================
-      # 7. INSTALAR CAPACITOR
+      # 7. CAPACITOR
       # ==========================================
 
       - name: Install Capacitor
@@ -116,7 +116,7 @@ jobs:
 
 
       # ==========================================
-      # 8. CRIAR PROJETO CAPACITOR
+      # 8. CRIAR CAPACITOR
       # ==========================================
 
       - name: Create Capacitor
@@ -130,7 +130,7 @@ jobs:
 
 
       # ==========================================
-      # 9. ADICIONAR ANDROID
+      # 9. ANDROID
       # ==========================================
 
       - name: Add Android
@@ -141,7 +141,7 @@ jobs:
 
 
       # ==========================================
-      # 10. SINCRONIZAR CAPACITOR
+      # 10. SINCRONIZAR
       # ==========================================
 
       - name: Sync Capacitor
@@ -186,20 +186,20 @@ jobs:
 
 
       # ==========================================
-      # 12. CONFIGURAR NOME
+      # 12. NOME DO APLICATIVO
       # ==========================================
 
       - name: Configure App Name
         shell: bash
         run: |
 
-          STRINGS="android/app/src/main/res/values/strings.xml"
+          FILE="android/app/src/main/res/values/strings.xml"
 
-          if [ -f "$STRINGS" ]; then
+          if [ -f "$FILE" ]; then
 
             sed -i \
               's|<string name="app_name">.*</string>|<string name="app_name">Geoárvore</string>|' \
-              "$STRINGS"
+              "$FILE"
 
           fi
 
@@ -208,35 +208,26 @@ jobs:
       # 13. CONFIGURAR ÍCONE
       # ==========================================
 
-      - name: Configure App Icon
+      - name: Configure Icon
         shell: bash
         run: |
 
-          echo "Configurando ícone..."
+          echo "Configurando ícone da planta..."
 
-          mkdir -p android/app/src/main/res/drawable
+          # Remover possíveis ícones/XML antigos
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          rm -f android/app/src/main/res/drawable/ic_launcher_background.xml
+          rm -f android/app/src/main/res/drawable/ic_launcher_foreground.png
 
+          # Criar pastas
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
-
-
-          # ========================================
-          # COPIAR IMAGEM
-          # ========================================
-
-          cp planta-cobra.png \
-            android/app/src/main/res/drawable/ic_launcher_foreground.png
-
-
-          # ========================================
-          # ÍCONES NORMAIS
-          # ========================================
-
+          # Copiar a planta para todos os tamanhos
           cp planta-cobra.png \
             android/app/src/main/res/mipmap-mdpi/ic_launcher.png
 
@@ -252,11 +243,7 @@ jobs:
           cp planta-cobra.png \
             android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-
-          # ========================================
-          # ÍCONES REDONDOS
-          # ========================================
-
+          # Ícone redondo
           cp planta-cobra.png \
             android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
 
@@ -272,69 +259,11 @@ jobs:
           cp planta-cobra.png \
             android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-
-          # ========================================
-          # FUNDO BRANCO
-          # ========================================
-
-          cat > android/app/src/main/res/drawable/ic_launcher_background.xml <<'EOF'
-
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <shape xmlns:android="http://schemas.android.com/apk/res/android"
-              android:shape="rectangle">
-
-              <solid android:color="#FFFFFF"/>
-
-          </shape>
-
-          EOF
-
-
-          # ========================================
-          # ÍCONE ADAPTATIVO
-          # ========================================
-
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
-
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <background
-                  android:drawable="@drawable/ic_launcher_background"/>
-
-              <foreground
-                  android:drawable="@drawable/ic_launcher_foreground"/>
-
-          </adaptive-icon>
-
-          EOF
-
-
-          # ========================================
-          # ÍCONE ADAPTATIVO REDONDO
-          # ========================================
-
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'EOF'
-
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <background
-                  android:drawable="@drawable/ic_launcher_background"/>
-
-              <foreground
-                  android:drawable="@drawable/ic_launcher_foreground"/>
-
-          </adaptive-icon>
-
-          EOF
+          echo "Ícone configurado com sucesso."
 
 
       # ==========================================
-      # 14. CONFIGURAR MANIFEST
+      # 14. MANIFEST
       # ==========================================
 
       - name: Configure Manifest
@@ -412,14 +341,14 @@ jobs:
 
           echo ""
           echo "======================================"
-          echo "APK GERADO COM SUCESSO!"
+          echo "       APK GERADO COM SUCESSO!"
           echo "======================================"
 
           ls -lh "$APK"
 
 
       # ==========================================
-      # 18. ENVIAR APK
+      # 18. DISPONIBILIZAR APK
       # ==========================================
 
       - name: Upload APK
