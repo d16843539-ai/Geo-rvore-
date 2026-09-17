@@ -24,34 +24,25 @@ jobs:
           mkdir -p www
           unzip -o app.zip -d www/ || unzip -o "aplicativo (1).zip" -d www/
 
-      - name: Build Android App with URL Icon
+      - name: Setup Capacitor and Build Android App
         run: |
           npm init -y
-          npm install @capacitor/cli @capacitor/core @capacitor/android
+          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/assets
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
-          
-          # 1. Altera o nome do aplicativo no Android
+
+          # 1. Altera o nome com acento no strings.xml
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Baixa a imagem da URL
-          curl -L -o icon.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
+          # 2. Baixa a imagem diretamente da URL para criar as 3 imagens base exigidas pelo Capacitor
+          mkdir -p assets
+          curl -L -o assets/icon-only.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
+          curl -L -o assets/icon-foreground.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
+          curl -L -o assets/icon-background.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
 
-          # 3. Remove a pasta de adaptativos para não conflitar
-          rm -rf android/app/src/main/res/mipmap-anydpi-v26
-
-          # 4. Substitui a imagem PNG em TODAS as pastas de resolução
-          for dir in android/app/src/main/res/mipmap-*; do
-            if [ -d "$dir" ]; then
-              cp icon.png "$dir/ic_launcher.png"
-              cp icon.png "$dir/ic_launcher_round.png"
-              cp icon.png "$dir/ic_launcher_foreground.png"
-            fi
-          done
-
-          # 5. Ajusta o AndroidManifest.xml para forçar o uso dos PNGs sem procurar XMLs adaptativos
-          sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"/android:roundIcon="@mipmap\/ic_launcher"/g' android/app/src/main/AndroidManifest.xml
+          # 3. Gera todos os ícones adaptativos do Android nativamente
+          npx capacitor-assets generate --android
 
           npx cap sync android
 
