@@ -3,9 +3,9 @@ name: Build APK
 on:
   push:
     branches:
-      - principal
       - main
       - master
+      - principal
 
   workflow_dispatch:
 
@@ -15,82 +15,115 @@ jobs:
 
     steps:
 
-      # =========================
-      # 1. BAIXAR O CÓDIGO
-      # =========================
+      # ==============================
+      # BAIXAR O PROJETO
+      # ==============================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # =========================
-      # 2. INSTALAR JAVA
-      # =========================
-      - name: Setup Java 21
+      # ==============================
+      # JAVA
+      # ==============================
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
 
-      # =========================
-      # 3. PREPARAR SITE
-      # =========================
-      - name: Extract Web Assets
+      # ==============================
+      # NODE
+      # ==============================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+
+      # ==============================
+      # PREPARAR SITE
+      # ==============================
+      - name: Prepare Website
+        shell: bash
         run: |
+
           mkdir -p www
 
           if [ -f "app.zip" ]; then
-            unzip -o app.zip -d www/
+            unzip -o "app.zip" -d www/
           elif [ -f "aplicativo (1).zip" ]; then
             unzip -o "aplicativo (1).zip" -d www/
           else
-            echo "ERRO: Nenhum arquivo ZIP encontrado."
+            echo "ERRO: arquivo ZIP não encontrado."
             exit 1
           fi
 
 
-      # =========================
-      # 4. INSTALAR NODE
-      # =========================
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-
-      # =========================
-      # 5. CRIAR CAPACITOR
-      # =========================
-      - name: Create Capacitor Project
+      # ==============================
+      # INSTALAR CAPACITOR
+      # ==============================
+      - name: Install Capacitor
         run: |
+
           npm init -y
 
-          npm install @capacitor/cli @capacitor/core @capacitor/android
+          npm install \
+            @capacitor/core@7 \
+            @capacitor/cli@7 \
+            @capacitor/android@7
 
-          npx cap init "Geoárvore" com.geoarvores.app --web-dir www
+
+      # ==============================
+      # CRIAR APLICATIVO
+      # ==============================
+      - name: Create Android Project
+        run: |
+
+          npx cap init "Geoárvore" "com.geoarvores.app" --web-dir www
 
           npx cap add android
 
 
-      # =========================
-      # 6. CONFIGURAR NOME DO APP
-      # =========================
-      - name: Configure App Name
+      # ==============================
+      # CORRIGIR KOTLIN
+      # ==============================
+      - name: Fix Kotlin Dependencies
+        working-directory: android
+        shell: bash
         run: |
-          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/' \
-          android/app/src/main/res/values/strings.xml
 
-          sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/' \
-          android/app/src/main/res/values/strings.xml
+          cat >> gradle.properties <<'EOF'
+
+          # Corrigir conflitos de versões do Kotlin
+          kotlin.stdlib.jdk.variants.version.alignment=true
+          EOF
 
 
-      # =========================
-      # 7. PREPARAR ÍCONE
-      # =========================
-      - name: Create App Icon
+          # Forçar todas as bibliotecas Kotlin para a mesma versão
+          cat >> build.gradle <<'EOF'
+
+          allprojects {
+              configurations.all {
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == "org.jetbrains.kotlin") {
+                          details.useVersion("1.8.22")
+                      }
+                  }
+              }
+          }
+          EOF
+
+
+      # ==============================
+      # ÍCONE
+      # ==============================
+      - name: Configure Icon
+        shell: bash
         run: |
 
           mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
 
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
@@ -98,63 +131,39 @@ jobs:
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
 
-
-          # ------------------------------------------------
-          # BAIXAR O ÍCONE
-          # ------------------------------------------------
-
+          # Baixar ícone
           curl -L \
-          -A "Mozilla/5.0" \
-          -o icon.png \
-          "https://nutty-tan-2ykiogfy.edgeone.dev/"
+            -A "Mozilla/5.0" \
+            -o icon.png \
+            "https://nutty-tan-2ykiogfy.edgeone.dev/"
 
 
-          # ------------------------------------------------
-          # VERIFICAR SE É REALMENTE UMA IMAGEM
-          # ------------------------------------------------
-
+          # Verificar imagem
           file icon.png
 
-          if ! file icon.png | grep -qiE "PNG|JPEG|WebP"; then
-            echo "ERRO: O arquivo baixado não é uma imagem válida."
-            exit 1
-          fi
 
-
-          # ------------------------------------------------
-          # ÍCONE PARA ANDROID ANTIGO
-          # ------------------------------------------------
-
+          # Ícones normais
           cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-
           cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-
           cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-
           cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-
           cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+
+          cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
 
-          # ------------------------------------------------
-          # FOREGROUND DO ÍCONE ADAPTATIVO
-          # ------------------------------------------------
-
+          # Foreground
           cp icon.png \
-          android/app/src/main/res/drawable/ic_launcher_foreground.png
+            android/app/src/main/res/drawable/ic_launcher_foreground.png
 
 
-          # ------------------------------------------------
-          # FUNDO BRANCO
-          # ------------------------------------------------
-
+          # Fundo
           cat > android/app/src/main/res/drawable/ic_launcher_background.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -167,78 +176,74 @@ jobs:
           EOF
 
 
-          # ------------------------------------------------
-          # ÍCONE ADAPTATIVO
-          # ANDROID 8+
-          # ------------------------------------------------
-
+          # Ícone adaptativo
           cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
 
               <background
-                  android:drawable="@drawable/ic_launcher_background" />
+                  android:drawable="@drawable/ic_launcher_background"/>
 
               <foreground
-                  android:drawable="@drawable/ic_launcher_foreground" />
+                  android:drawable="@drawable/ic_launcher_foreground"/>
 
           </adaptive-icon>
           EOF
 
 
-          # ------------------------------------------------
-          # ÍCONE ADAPTATIVO REDONDO
-          # ------------------------------------------------
-
+          # Ícone adaptativo redondo
           cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
 
               <background
-                  android:drawable="@drawable/ic_launcher_background" />
+                  android:drawable="@drawable/ic_launcher_background"/>
 
               <foreground
-                  android:drawable="@drawable/ic_launcher_foreground" />
+                  android:drawable="@drawable/ic_launcher_foreground"/>
 
           </adaptive-icon>
           EOF
 
 
-      # =========================
-      # 8. GARANTIR QUE O MANIFEST
-      # USE O ÍCONE
-      # =========================
-      - name: Configure Android Manifest
-        run: |
-
-          sed -i \
-          's/android:icon="@mipmap\/ic_launcher"/android:icon="@mipmap\/ic_launcher"/' \
-          android/app/src/main/AndroidManifest.xml
-
-
-      # =========================
-      # 9. SINCRONIZAR CAPACITOR
-      # =========================
+      # ==============================
+      # SINCRONIZAR
+      # ==============================
       - name: Capacitor Sync
         run: |
+
           npx cap sync android
 
 
-      # =========================
-      # 10. COMPILAR APK
-      # =========================
+      # ==============================
+      # LIMPAR BUILD ANTERIOR
+      # ==============================
+      - name: Clean
+        working-directory: android
+        run: |
+
+          chmod +x gradlew
+
+          ./gradlew clean
+
+
+      # ==============================
+      # COMPILAR APK
+      # ==============================
       - name: Build APK
-        uses: gradle/gradle-build-action@v3
-        with:
-          build-root-directory: android
-          arguments: assembleDebug
+        working-directory: android
+        run: |
+
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace
 
 
-      # =========================
-      # 11. DISPONIBILIZAR APK
-      # =========================
+      # ==============================
+      # ENVIAR APK
+      # ==============================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
