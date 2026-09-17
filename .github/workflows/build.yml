@@ -13,35 +13,20 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Extract Web Assets
+      - name: Extract zip file
         run: |
           mkdir -p www
           unzip -o app.zip -d www/
 
-      - name: Build Android APK
-        run: |
-          npm init -y
-          npm install @capacitor/cli @capacitor/core @capacitor/android
-          npx cap init GeoArvore com.geoarvores.app --web-dir www
-          npx cap add android
-          npx cap sync android
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+      - name: Build Webview APK
+        uses: jasonmcfadden/static-to-apk@v1.1
+        with:
+          app-name: "GeoArvore"
+          app-id: "com.geoarvores.app"
+          web-dir: "www"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GeoArvore-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: "**/*.apk"
