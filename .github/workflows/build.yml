@@ -1,3 +1,4 @@
+
 name: Build APK
 
 on:
@@ -38,9 +39,12 @@ jobs:
           # 2. Baixa a imagem diretamente da URL
           curl -L -o icon.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
 
-          # 3. Copia a imagem baixada para todas as resoluções do Android
+          # 3. Limpa arquivos antigos para evitar conflitos de duplicatas
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/*
+
+          # 4. Copia a imagem para as pastas mipmap
           for dir in android/app/src/main/res/mipmap-*; do
-            if [ -d "$dir" ]; then
+            if [ -d "$dir" ] && [ "$dir" != "android/app/src/main/res/mipmap-anydpi-v26" ]; then
               cp icon.png "$dir/ic_launcher.png"
               cp icon.png "$dir/ic_launcher_round.png"
               cp icon.png "$dir/ic_launcher_foreground.png"
@@ -48,8 +52,7 @@ jobs:
             fi
           done
 
-          # 4. Ajusta o XML do ícone adaptativo do Android
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          # 5. Sobrescreve o XML adaptativo sem quebrar a estrutura do YAML
           echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@mipmap/ic_launcher_background"/><foreground android:drawable="@mipmap/ic_launcher_foreground"/></adaptive-icon>' > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@mipmap/ic_launcher_background"/><foreground android:drawable="@mipmap/ic_launcher_foreground"/></adaptive-icon>' > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
