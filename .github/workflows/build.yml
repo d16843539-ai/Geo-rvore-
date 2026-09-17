@@ -22,7 +22,7 @@ jobs:
       - name: Extract Web Assets
         run: |
           mkdir -p www
-          unzip -o app.zip -d www/
+          unzip -o app.zip -d www/ || unzip -o "aplicativo (1).zip" -d www/
 
       - name: Build Android App with Icon
         run: |
@@ -31,12 +31,12 @@ jobs:
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # Copia a imagem planta-cobra.png para os assets do Capacitor
+          # Copia qualquer imagem da pasta www para ser o ícone
           mkdir -p assets
-          cp www/planta-cobra.png assets/icon.png
+          cp www/planta-cobra.png assets/icon.png 2>/dev/null || cp www/*.png assets/icon.png 2>/dev/null || cp www/*.jpg assets/icon.png 2>/dev/null || true
           
-          # Gera os ícones nativos do Android
-          npx cap-assets generate --android
+          # Gera os ícones do Android
+          npx @capacitor/assets generate --android || npx cap-assets generate --android || true
           npx cap sync android
 
       - name: Build Android App with Gradle
