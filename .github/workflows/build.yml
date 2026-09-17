@@ -24,19 +24,23 @@ jobs:
           mkdir -p www
           unzip -o app.zip -d www/ || unzip -o "aplicativo (1).zip" -d www/
 
-      - name: Build Android App with Icon
+      - name: Build Android App with Custom Branding
         run: |
           npm init -y
           npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/assets
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # Copia qualquer imagem da pasta www para ser o ícone
+          # 1. Altera o nome exibido no ícone do Android diretamente no XML nativo
+          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
+          sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
+
+          # 2. Prepara a imagem do ícone para geração de assets
           mkdir -p assets
-          cp www/planta-cobra.png assets/icon.png 2>/dev/null || cp www/*.png assets/icon.png 2>/dev/null || cp www/*.jpg assets/icon.png 2>/dev/null || true
-          
-          # Gera os ícones do Android
-          npx @capacitor/assets generate --android || npx cap-assets generate --android || true
+          cp www/planta-cobra.png assets/icon.png 2>/dev/null || cp www/*.png assets/icon.png 2>/dev/null || true
+
+          # 3. Gera e aplica os ícones nativos do Android
+          npx @capacitor/assets generate --android
           npx cap sync android
 
       - name: Build Android App with Gradle
