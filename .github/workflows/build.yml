@@ -31,48 +31,22 @@ jobs:
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # 1. Altera o nome exibido no aplicativo nativo
+          # 1. Altera o nome exibido no aplicativo
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Prepara o Python e a biblioteca Pillow para redimensionar o ícone
-          python3 -m pip install pillow
-          
-          # 3. Cria o arquivo python separadamente para evitar erro de identação no YAML
-          cat << 'EOF' > generate_icons.py
-          import os
-          from PIL import Image
+          # 2. Localiza a imagem do ícone no www
+          ICON=$(find www -iname "planta-cobra.png" -o -iname "*.png" | head -n 1)
 
-          icon_path = 'www/planta-cobra.png'
-          if not os.path.exists(icon_path):
-              for f in os.listdir('www'):
-                  if f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                      icon_path = os.path.join('www', f)
-                      break
+          # 3. Copia a imagem sobrescrevendo diretamente os ícones padrões do Android
+          for dir in android/app/src/main/res/mipmap-*; do
+            if [ -d "$dir" ]; then
+              cp "$ICON" "$dir/ic_launcher.png"
+              cp "$ICON" "$dir/ic_launcher_round.png"
+              cp "$ICON" "$dir/ic_launcher_foreground.png"
+            fi
+          done
 
-          img = Image.open(icon_path).convert('RGBA')
-          res_path = 'android/app/src/main/res'
-          
-          sizes = {
-              'mipmap-mdpi': 48,
-              'mipmap-hdpi': 72,
-              'mipmap-xhdpi': 96,
-              'mipmap-xxhdpi': 144,
-              'mipmap-xxxhdpi': 192
-          }
-
-          for folder, size in sizes.items():
-              target_dir = os.path.join(res_path, folder)
-              os.makedirs(target_dir, exist_ok=True)
-              resized = img.resize((size, size), Image.Resampling.LANCZOS)
-              resized.save(os.path.join(target_dir, 'ic_launcher.png'))
-              resized.save(os.path.join(target_dir, 'ic_launcher_round.png'))
-              resized.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
-          print('Icones gerados com sucesso!')
-          EOF
-
-          # 4. Executa a geração e sincronização
-          python3 generate_icons.py
           npx cap sync android
 
       - name: Build Android App with Gradle
