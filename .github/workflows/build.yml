@@ -19,10 +19,13 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install ImageMagick
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Pillow
+        run: pip install pillow
 
       - name: Extract Web Assets
         run: |
@@ -32,24 +35,48 @@ jobs:
       - name: Build Android App with Custom Branding
         run: |
           npm init -y
-          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/assets
+          npm install @capacitor/cli @capacitor/core @capacitor/android
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # 1. Altera o nome exibido no Android
+          # 1. Altera o nome exibido no aplicativo
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Copia e redimensiona a imagem para 1024x1024 (formato exigido pelo Capacitor)
-          mkdir -p assets
-          cp www/planta-cobra.png assets/icon.png 2>/dev/null || cp www/*.png assets/icon.png 2>/dev/null || true
-          convert assets/icon.png -resize 1024x1024! assets/icon.png
-          cp assets/icon.png assets/icon-only.png
-          cp assets/icon.png assets/icon-foreground.png
-          cp assets/icon.png assets/icon-background.png
+          # 2. Script Python para redimensionar e substituir todos os ícones nativos do Android
+          python3 -c "
+          import os
+          from PIL import Image
 
-          # 3. Gera os ícones e sincroniza com o projeto Android
-          npx @capacitor/assets generate --android
+          icon_path = 'www/planta-cobra.png'
+          if not os.path.exists(icon_path):
+              for f in os.listdir('www'):
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                      icon_path = os.path.join('www', f)
+                      break
+
+          img = Image.open(icon_path).convert('RGBA')
+          res_path = 'android/app/src/main/res'
+          
+          sizes = {
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192
+          }
+
+          for folder, size in sizes.items():
+              target_dir = os.path.join(res_path, folder)
+              os.makedirs(target_dir, exist_ok=True)
+              resized = img.resize((size, size), Image.Resampling.LANCZOS)
+              
+              resized.save(os.path.join(target_dir, 'ic_launcher.png'))
+              resized.save(os.path.join(target_dir, 'ic_launcher_round.png'))
+              resized.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
+          print('Ícones substituídos com sucesso!')
+          "
+
           npx cap sync android
 
       - name: Build Android App with Gradle
