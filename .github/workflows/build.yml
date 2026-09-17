@@ -24,23 +24,21 @@ jobs:
           mkdir -p www
           unzip -o app.zip -d www/ || unzip -o "aplicativo (1).zip" -d www/
 
-      - name: Setup Capacitor
+      - name: Setup Capacitor and Create Android Project
         run: |
           npm init -y
           npm install @capacitor/cli @capacitor/core @capacitor/android
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
 
-      - name: Configure Name and Icons
-        run: |
-          # 1. Altera o nome no Android com suporte a diacríticos
+          # Configura nome do App com acento
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Baixa a imagem diretamente da URL
+          # Baixa a imagem diretamente da URL
           curl -k -L -A "Mozilla/5.0" -o icon.png "https://nutty-tan-2ykiogfy.edgeone.dev/"
 
-          # 3. Copia a imagem baixada para todas as resoluções do Android
+          # Substitui os ícones PNG
           for dir in android/app/src/main/res/mipmap-*; do
             if [ -d "$dir" ]; then
               cp icon.png "$dir/ic_launcher.png"
@@ -49,8 +47,8 @@ jobs:
             fi
           done
 
-          # 4. Força o uso direto dos arquivos de imagem no AndroidManifest
-          sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"/android:roundIcon="@mipmap\/ic_launcher"/g' android/app/src/main/AndroidManifest.xml
+          # Remove a pasta adaptativa v26 para não sobrepor o PNG no Android 8+
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
 
           npx cap sync android
 
