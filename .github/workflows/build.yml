@@ -19,18 +19,25 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Prepare Web Assets
+      - name: Extract Web Assets
         run: |
           mkdir -p www
           unzip -o app.zip -d www/
-          ls -la www/
 
-      - name: Init Node and Capacitor
+      - name: Build Android App with Icon
         run: |
           npm init -y
-          npm install @capacitor/cli @capacitor/core @capacitor/android
-          npx cap init GeoArvore com.geoarvores.app --web-dir www
+          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/assets
+          npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
+          
+          # Copia a imagem planta-cobra.png para os assets do Capacitor
+          mkdir -p assets
+          cp www/planta-cobra.png assets/icon.png
+          
+          # Gera os ícones nativos do Android
+          npx cap-assets generate --android
+          npx cap sync android
 
       - name: Build Android App with Gradle
         uses: gradle/gradle-build-action@v3
@@ -41,5 +48,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GeoArvore-APK
+          name: Geoarvore-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
