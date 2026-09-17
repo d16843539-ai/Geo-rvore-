@@ -19,16 +19,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Unzip Web Assets
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract Web Assets
         run: |
           mkdir -p www
           unzip -o app.zip -d www/
-          ls -la www/
 
-      - name: Build APK via Capacitor
+      - name: Build Android APK
         run: |
-          npm install -g @capacitor/cli @capacitor/core @capacitor/android
           npm init -y
+          npm install @capacitor/cli @capacitor/core @capacitor/android
           npx cap init GeoArvore com.geoarvores.app --web-dir www
           npx cap add android
           npx cap sync android
