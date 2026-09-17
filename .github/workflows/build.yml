@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "principal", "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
           unzip -o app.zip -d www/
           ls -la www/
 
-      - name: Build APK via Capacitor / Webview
+      - name: Build APK via Capacitor
         run: |
           npm install -g @capacitor/cli @capacitor/core @capacitor/android
           npm init -y
