@@ -19,26 +19,24 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Extract Web Assets
+      - name: Prepare Web Assets
         run: |
           mkdir -p www
           unzip -o app.zip -d www/
+          ls -la www/
 
-      - name: Build Android APK
+      - name: Init Node and Capacitor
         run: |
           npm init -y
           npm install @capacitor/cli @capacitor/core @capacitor/android
           npx cap init GeoArvore com.geoarvores.app --web-dir www
           npx cap add android
-          npx cap sync android
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+
+      - name: Build Android App with Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          build-root-directory: android
+          arguments: assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
