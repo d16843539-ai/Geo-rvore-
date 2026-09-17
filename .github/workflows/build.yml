@@ -11,62 +11,106 @@ on:
 
 jobs:
   build:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # ==============================
-      # BAIXAR O PROJETO
-      # ==============================
+      # ==================================================
+      # 1. BAIXAR O CÓDIGO DO GITHUB
+      # ==================================================
+
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # ==============================
-      # JAVA
-      # ==============================
+      # ==================================================
+      # 2. INSTALAR JAVA
+      # ==================================================
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
 
 
-      # ==============================
-      # NODE
-      # ==============================
+      # ==================================================
+      # 3. INSTALAR NODE.JS
+      # ==================================================
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
 
-      # ==============================
-      # PREPARAR SITE
-      # ==============================
-      - name: Prepare Website
+      # ==================================================
+      # 4. EXTRAIR O APP.ZIP
+      # ==================================================
+
+      - name: Extract App
         shell: bash
         run: |
 
-          mkdir -p www
+          echo "Procurando app.zip..."
 
-          if [ -f "app.zip" ]; then
-            unzip -o "app.zip" -d www/
-          elif [ -f "aplicativo (1).zip" ]; then
-            unzip -o "aplicativo (1).zip" -d www/
-          else
-            echo "ERRO: arquivo ZIP não encontrado."
+          if [ ! -f "app.zip" ]; then
+            echo "ERRO: app.zip não encontrado."
             exit 1
           fi
 
+          mkdir -p www
 
-      # ==============================
-      # INSTALAR CAPACITOR
-      # ==============================
-      - name: Install Capacitor
+          unzip -o "app.zip" -d www/
+
+          echo ""
+          echo "Arquivos encontrados:"
+          find www -maxdepth 2 -type f
+
+
+      # ==================================================
+      # 5. VERIFICAR O ÍCONE
+      # ==================================================
+
+      - name: Check Icon
+        shell: bash
+        run: |
+
+          echo "Procurando planta-cobra.png..."
+
+          if [ ! -f "www/planta-cobra.png" ]; then
+            echo "ERRO: planta-cobra.png não encontrada dentro do app.zip."
+
+            echo "Arquivos disponíveis:"
+            find www -type f
+
+            exit 1
+          fi
+
+          echo "Ícone encontrado!"
+
+          file www/planta-cobra.png
+
+
+      # ==================================================
+      # 6. CRIAR PROJETO NODE
+      # ==================================================
+
+      - name: Initialize Node Project
+        shell: bash
         run: |
 
           npm init -y
+
+
+      # ==================================================
+      # 7. INSTALAR CAPACITOR
+      # ==================================================
+
+      - name: Install Capacitor
+        shell: bash
+        run: |
 
           npm install \
             @capacitor/core@7 \
@@ -74,56 +118,106 @@ jobs:
             @capacitor/android@7
 
 
-      # ==============================
-      # CRIAR APLICATIVO
-      # ==============================
-      - name: Create Android Project
+      # ==================================================
+      # 8. CRIAR PROJETO CAPACITOR
+      # ==================================================
+
+      - name: Create Capacitor
+        shell: bash
         run: |
 
-          npx cap init "Geoárvore" "com.geoarvores.app" --web-dir www
+          npx cap init \
+            "Geoárvore" \
+            "com.geoarvores.app" \
+            --web-dir www
+
+
+      # ==================================================
+      # 9. ADICIONAR ANDROID
+      # ==================================================
+
+      - name: Add Android
+        shell: bash
+        run: |
 
           npx cap add android
 
 
-      # ==============================
-      # CORRIGIR KOTLIN
-      # ==============================
-      - name: Fix Kotlin Dependencies
-        working-directory: android
+      # ==================================================
+      # 10. SINCRONIZAR CAPACITOR
+      # ==================================================
+
+      - name: Sync Capacitor
         shell: bash
         run: |
 
-          cat >> gradle.properties <<'EOF'
-
-          # Corrigir conflitos de versões do Kotlin
-          kotlin.stdlib.jdk.variants.version.alignment=true
-          EOF
+          npx cap sync android
 
 
-          # Forçar todas as bibliotecas Kotlin para a mesma versão
-          cat >> build.gradle <<'EOF'
+      # ==================================================
+      # 11. CORRIGIR CONFLITO DO KOTLIN
+      # ==================================================
+
+      - name: Fix Kotlin Dependencies
+        shell: bash
+        run: |
+
+          echo "Corrigindo dependências Kotlin..."
+
+          cat >> android/build.gradle <<'EOF'
 
           allprojects {
-              configurations.all {
+              configurations.configureEach {
                   resolutionStrategy.eachDependency { details ->
                       if (details.requested.group == "org.jetbrains.kotlin") {
                           details.useVersion("1.8.22")
                       }
                   }
+
+                  resolutionStrategy.dependencySubstitution {
+                      substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") using module("org.jetbrains.kotlin:kotlin-stdlib:1.8.22")
+                      substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") using module("org.jetbrains.kotlin:kotlin-stdlib:1.8.22")
+                  }
               }
           }
+
           EOF
 
+          echo "Kotlin corrigido."
 
-      # ==============================
-      # ÍCONE
-      # ==============================
-      - name: Configure Icon
+
+      # ==================================================
+      # 12. CONFIGURAR NOME DO APLICATIVO
+      # ==================================================
+
+      - name: Configure App Name
         shell: bash
         run: |
 
+          if [ -f "android/app/src/main/res/values/strings.xml" ]; then
+
+            sed -i \
+              's|<string name="app_name">.*</string>|<string name="app_name">Geoárvore</string>|' \
+              android/app/src/main/res/values/strings.xml
+
+          fi
+
+
+      # ==================================================
+      # 13. CONFIGURAR ÍCONE
+      # ==================================================
+
+      - name: Configure App Icon
+        shell: bash
+        run: |
+
+          echo "Configurando ícone Geoárvore..."
+
+          # -----------------------------------------------
+          # Pastas
+          # -----------------------------------------------
+
           mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
 
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
@@ -131,39 +225,61 @@ jobs:
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-
-          # Baixar ícone
-          curl -L \
-            -A "Mozilla/5.0" \
-            -o icon.png \
-            "https://nutty-tan-2ykiogfy.edgeone.dev/"
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
 
 
-          # Verificar imagem
-          file icon.png
+          # -----------------------------------------------
+          # Copiar planta para o foreground
+          # -----------------------------------------------
 
-
-          # Ícones normais
-          cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-
-          cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-
-
-          # Foreground
-          cp icon.png \
+          cp www/planta-cobra.png \
             android/app/src/main/res/drawable/ic_launcher_foreground.png
 
 
-          # Fundo
+          # -----------------------------------------------
+          # ÍCONES PARA DIFERENTES DENSIDADES
+          # -----------------------------------------------
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+
+          # -----------------------------------------------
+          # ÍCONES REDONDOS
+          # -----------------------------------------------
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+
+          cp www/planta-cobra.png \
+            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+
+
+          # ==================================================
+          # FUNDO BRANCO
+          # ==================================================
+
           cat > android/app/src/main/res/drawable/ic_launcher_background.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -176,7 +292,10 @@ jobs:
           EOF
 
 
-          # Ícone adaptativo
+          # ==================================================
+          # ÍCONE ADAPTATIVO ANDROID 8+
+          # ==================================================
+
           cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -192,7 +311,10 @@ jobs:
           EOF
 
 
-          # Ícone adaptativo redondo
+          # ==================================================
+          # ÍCONE ADAPTATIVO REDONDO
+          # ==================================================
+
           cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -208,44 +330,53 @@ jobs:
           EOF
 
 
-      # ==============================
-      # SINCRONIZAR
-      # ==============================
-      - name: Capacitor Sync
-        run: |
+          # ==================================================
+          # 14. CONFIGURAR ANDROID MANIFEST
+          # ==================================================
 
-          npx cap sync android
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          if [ -f "$MANIFEST" ]; then
+
+            sed -i \
+              's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' \
+              "$MANIFEST"
+
+            sed -i \
+              's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' \
+              "$MANIFEST"
+
+          fi
 
 
-      # ==============================
-      # LIMPAR BUILD ANTERIOR
-      # ==============================
-      - name: Clean
+          echo ""
+          echo "================================"
+          echo "Ícone configurado!"
+          echo "================================"
+
+
+      # ==================================================
+      # 15. LIMPAR BUILD
+      # ==================================================
+
+      - name: Clean Android
         working-directory: android
+        shell: bash
         run: |
 
           chmod +x gradlew
 
-          ./gradlew clean
+          ./gradlew clean \
+            --no-daemon
 
 
-      # ==============================
-      # COMPILAR APK
-      # ==============================
+      # ==================================================
+      # 16. COMPILAR APK
+      # ==================================================
+
       - name: Build APK
         working-directory: android
+        shell: bash
         run: |
 
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace
-
-
-      # ==============================
-      # ENVIAR APK
-      # ==============================
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Geoarvore-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          chmod +x gradlew
