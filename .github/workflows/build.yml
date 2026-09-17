@@ -19,6 +19,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
       - name: Extract Web Assets
         run: |
           mkdir -p www
@@ -31,15 +36,19 @@ jobs:
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # 1. Altera o nome exibido no ícone do Android diretamente no XML nativo
+          # 1. Altera o nome exibido no Android
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Prepara a imagem do ícone para geração de assets
+          # 2. Copia e redimensiona a imagem para 1024x1024 (formato exigido pelo Capacitor)
           mkdir -p assets
           cp www/planta-cobra.png assets/icon.png 2>/dev/null || cp www/*.png assets/icon.png 2>/dev/null || true
+          convert assets/icon.png -resize 1024x1024! assets/icon.png
+          cp assets/icon.png assets/icon-only.png
+          cp assets/icon.png assets/icon-foreground.png
+          cp assets/icon.png assets/icon-background.png
 
-          # 3. Gera e aplica os ícones nativos do Android
+          # 3. Gera os ícones e sincroniza com o projeto Android
           npx @capacitor/assets generate --android
           npx cap sync android
 
