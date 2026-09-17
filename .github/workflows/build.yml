@@ -19,14 +19,6 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install Pillow
-        run: pip install pillow
-
       - name: Extract Web Assets
         run: |
           mkdir -p www
@@ -39,12 +31,15 @@ jobs:
           npx cap init "Geoárvore" com.geoarvores.app --web-dir www
           npx cap add android
           
-          # 1. Altera o nome exibido no aplicativo
+          # 1. Altera o nome exibido no aplicativo nativo
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
           sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">Geoárvore<\/string>/g' android/app/src/main/res/values/strings.xml
 
-          # 2. Script Python para redimensionar e substituir todos os ícones nativos do Android
-          python3 -c "
+          # 2. Prepara o Python e a biblioteca Pillow para redimensionar o ícone
+          python3 -m pip install pillow
+          
+          # 3. Cria o arquivo python separadamente para evitar erro de identação no YAML
+          cat << 'EOF' > generate_icons.py
           import os
           from PIL import Image
 
@@ -70,13 +65,14 @@ jobs:
               target_dir = os.path.join(res_path, folder)
               os.makedirs(target_dir, exist_ok=True)
               resized = img.resize((size, size), Image.Resampling.LANCZOS)
-              
               resized.save(os.path.join(target_dir, 'ic_launcher.png'))
               resized.save(os.path.join(target_dir, 'ic_launcher_round.png'))
               resized.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
-          print('Ícones substituídos com sucesso!')
-          "
+          print('Icones gerados com sucesso!')
+          EOF
 
+          # 4. Executa a geração e sincronização
+          python3 generate_icons.py
           npx cap sync android
 
       - name: Build Android App with Gradle
