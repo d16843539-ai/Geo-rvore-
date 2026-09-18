@@ -300,23 +300,27 @@ jobs:
       # 11. CONFIGURAR MANIFEST
       # ==================================================
 
-      - name: Configure Manifest
+       - name: Configure Manifest
         working-directory: project
         shell: bash
         run: |
-
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          sed -i \
-            's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' \
-            "$MANIFEST"
+          # Ícones
+          sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' "$MANIFEST"
+          sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' "$MANIFEST"
 
-          sed -i \
-            's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' \
-            "$MANIFEST"
+          # Permissões necessárias
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST" || \
+            sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
 
-          echo "Manifest configurado."
+          echo "Manifest configurado com GPS."
 
+          echo ""
+          echo "Permissões encontradas:"
+          grep 'uses-permission' "$MANIFEST" || true
 
       # ==================================================
       # 12. GARANTIR NOME DO APP
