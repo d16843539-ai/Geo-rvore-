@@ -6,28 +6,24 @@ on:
       - principal
       - main
       - master
-
   workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
-      # ==================================================
-      # 1. BAIXAR REPOSITÓRIO
-      # ==================================================
-
+      # =========================================================
+      # 1. BAIXAR O REPOSITÓRIO
+      # =========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # ==================================================
-      # 2. JAVA 21
-      # ==================================================
-
+      # =========================================================
+      # 2. JAVA
+      # =========================================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -35,42 +31,41 @@ jobs:
           java-version: "21"
 
 
-      # ==================================================
-      # 3. NODE 22
-      # ==================================================
-
+      # =========================================================
+      # 3. NODE
+      # =========================================================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
 
-      # ==================================================
-      # 4. LOCALIZAR O ZIP NOVO
-      # ==================================================
-
+      # =========================================================
+      # 4. ENCONTRAR O ZIP
+      # =========================================================
       - name: Find Project ZIP
         shell: bash
         run: |
 
-          echo "Arquivos do repositório:"
+          echo "Arquivos encontrados:"
           find . -maxdepth 2 -type f | sort
-
-          echo ""
 
           ZIP=""
 
           if [ -f "GeoArvore_atualizado.zip" ]; then
-              ZIP="GeoArvore_atualizado.zip"
+            ZIP="GeoArvore_atualizado.zip"
+
           elif [ -f "GeoArvore_atualizado (1).zip" ]; then
-              ZIP="GeoArvore_atualizado (1).zip"
+            ZIP="GeoArvore_atualizado (1).zip"
+
           else
-              ZIP=$(find . -maxdepth 1 -type f -iname "GeoArvore_atualizado*.zip" | head -n 1)
+            ZIP=$(find . -maxdepth 1 -type f \
+              -iname "GeoArvore_atualizado*.zip" | head -n 1)
           fi
 
           if [ -z "$ZIP" ]; then
-              echo "ERRO: GeoArvore_atualizado.zip não encontrado!"
-              exit 1
+            echo "ERRO: ZIP do projeto não encontrado!"
+            exit 1
           fi
 
           echo "ZIP encontrado:"
@@ -79,10 +74,9 @@ jobs:
           echo "PROJECT_ZIP=$ZIP" >> "$GITHUB_ENV"
 
 
-      # ==================================================
+      # =========================================================
       # 5. EXTRAIR PROJETO
-      # ==================================================
-
+      # =========================================================
       - name: Extract Project
         shell: bash
         run: |
@@ -95,27 +89,20 @@ jobs:
 
           echo ""
           echo "Projeto extraído."
-
           echo ""
-          echo "Arquivos principais:"
 
-          find project \
-            -maxdepth 2 \
-            -type f \
-            \( \
-              -name "package.json" \
-              -o -name "capacitor.config.json" \
-              -o -name "index.html" \
-              -o -name "server.py" \
-              -o -name "manifest.json" \
-            \) \
+          find project -maxdepth 2 -type f \
+            \( -name "package.json" \
+            -o -name "capacitor.config.json" \
+            -o -name "index.html" \
+            -o -name "server.py" \
+            -o -name "manifest.json" \) \
             -print
 
 
-      # ==================================================
+      # =========================================================
       # 6. VERIFICAR PROJETO
-      # ==================================================
-
+      # =========================================================
       - name: Check Project
         shell: bash
         run: |
@@ -150,45 +137,45 @@ jobs:
           echo "Projeto válido!"
 
 
-      # ==================================================
+      # =========================================================
       # 7. VERIFICAR PLANTA
-      # ==================================================
-
+      # =========================================================
       - name: Check Plant Icon
         shell: bash
         run: |
 
           if [ -f "project/www/planta-cobra.png" ]; then
 
-              echo "Ícone encontrado em:"
-              echo "project/www/planta-cobra.png"
+            echo "Ícone encontrado em project/www/"
 
           elif [ -f "project/planta-cobra.png" ]; then
 
-              echo "Ícone encontrado na raiz."
+            echo "Ícone encontrado na raiz do projeto."
 
-              cp project/planta-cobra.png \
-                 project/www/planta-cobra.png
+            cp project/planta-cobra.png \
+               project/www/planta-cobra.png
 
           elif [ -f "planta-cobra.png" ]; then
 
-              echo "Ícone encontrado no repositório."
+            echo "Ícone encontrado na raiz do repositório."
 
-              cp planta-cobra.png \
-                 project/www/planta-cobra.png
+            cp planta-cobra.png \
+               project/www/planta-cobra.png
 
           else
 
-              echo "ERRO: planta-cobra.png não encontrada!"
-              exit 1
+            echo "ERRO: planta-cobra.png não encontrada!"
+
+            exit 1
 
           fi
 
+          file project/www/planta-cobra.png
 
-      # ==================================================
+
+      # =========================================================
       # 8. INSTALAR DEPENDÊNCIAS
-      # ==================================================
-
+      # =========================================================
       - name: Install Dependencies
         working-directory: project
         shell: bash
@@ -198,19 +185,18 @@ jobs:
 
           if [ -f "package-lock.json" ]; then
 
-              npm ci --ignore-scripts
+            npm ci --ignore-scripts
 
           else
 
-              npm install --ignore-scripts
+            npm install --ignore-scripts
 
           fi
 
 
-      # ==================================================
+      # =========================================================
       # 9. SINCRONIZAR CAPACITOR
-      # ==================================================
-
+      # =========================================================
       - name: Sync Capacitor
         working-directory: project
         shell: bash
@@ -219,10 +205,9 @@ jobs:
           npx cap sync android
 
 
-      # ==================================================
-      # 10. CONFIGURAR ÍCONE DO APLICATIVO
-      # ==================================================
-
+      # =========================================================
+      # 10. CONFIGURAR ÍCONE
+      # =========================================================
       - name: Configure App Icon
         working-directory: project
         shell: bash
@@ -232,32 +217,23 @@ jobs:
 
           RES="android/app/src/main/res"
 
-          # ----------------------------------------------
-          # Remover configurações adaptativas antigas
-          # ----------------------------------------------
-
+          # Remover ícones adaptativos antigos
           rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
           rm -f "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
+          # Remover recursos antigos do Capacitor
           rm -f "$RES/drawable/ic_launcher_background.xml"
           rm -f "$RES/drawable/ic_launcher_foreground.png"
-
           rm -f "$RES/drawable-v24/ic_launcher_foreground.xml"
 
-          # ----------------------------------------------
           # Criar pastas
-          # ----------------------------------------------
-
           mkdir -p "$RES/mipmap-mdpi"
           mkdir -p "$RES/mipmap-hdpi"
           mkdir -p "$RES/mipmap-xhdpi"
           mkdir -p "$RES/mipmap-xxhdpi"
           mkdir -p "$RES/mipmap-xxxhdpi"
 
-          # ----------------------------------------------
-          # Copiar planta para os ícones
-          # ----------------------------------------------
-
+          # Ícone principal
           cp www/planta-cobra.png \
             "$RES/mipmap-mdpi/ic_launcher.png"
 
@@ -273,10 +249,7 @@ jobs:
           cp www/planta-cobra.png \
             "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
-          # ----------------------------------------------
-          # Ícones redondos
-          # ----------------------------------------------
-
+          # Ícone redondo
           cp www/planta-cobra.png \
             "$RES/mipmap-mdpi/ic_launcher_round.png"
 
@@ -292,40 +265,134 @@ jobs:
           cp www/planta-cobra.png \
             "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
 
-          echo ""
           echo "Ícone configurado!"
 
 
-      # ==================================================
-      # 11. CONFIGURAR MANIFEST
-      # ==================================================
-
-       - name: Configure Manifest
+      # =========================================================
+      # 11. CONFIGURAR ANDROID MANIFEST
+      # =========================================================
+      - name: Configure Android Manifest
         working-directory: project
         shell: bash
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          # Ícones
-          sed -i 's|android:icon="[^"]*"|android:icon="@mipmap/ic_launcher"|g' "$MANIFEST"
-          sed -i 's|android:roundIcon="[^"]*"|android:roundIcon="@mipmap/ic_launcher_round"|g' "$MANIFEST"
+          python3 <<'PY'
 
-          # Permissões necessárias
-          grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST" || \
-            sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\
-            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\
-            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
+          from pathlib import Path
 
-          echo "Manifest configurado com GPS."
+          manifest = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
+
+          text = manifest.read_text(encoding="utf-8")
+
+          # -----------------------------------------------------
+          # ÍCONES
+          # -----------------------------------------------------
+
+          import re
+
+          text = re.sub(
+              r'android:icon="[^"]*"',
+              'android:icon="@mipmap/ic_launcher"',
+              text
+          )
+
+          text = re.sub(
+              r'android:roundIcon="[^"]*"',
+              'android:roundIcon="@mipmap/ic_launcher_round"',
+              text
+          )
+
+          # -----------------------------------------------------
+          # PERMISSÕES DE INTERNET + GPS
+          # -----------------------------------------------------
+
+          permissions = [
+              '    <uses-permission android:name="android.permission.INTERNET" />',
+              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
+          ]
+
+          # Remover permissões antigas dessas três para evitar
+          # duplicação
+          text = re.sub(
+              r'\s*<uses-permission android:name="android.permission.INTERNET"\s*/>',
+              '',
+              text
+          )
+
+          text = re.sub(
+              r'\s*<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\s*/>',
+              '',
+              text
+          )
+
+          text = re.sub(
+              r'\s*<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\s*/>',
+              '',
+              text
+          )
+
+          # Inserir permissões logo depois da abertura do manifest
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+
+          if marker not in text:
+              raise SystemExit(
+                  "ERRO: abertura do AndroidManifest.xml não encontrada!"
+              )
+
+          text = text.replace(
+              marker,
+              marker + "\n\n" + "\n".join(permissions),
+              1
+          )
+
+          manifest.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print("AndroidManifest.xml configurado.")
+          print()
+          print("Permissões:")
+          for p in permissions:
+              print(p)
+
+          PY
+
+
+      # =========================================================
+      # 12. MOSTRAR MANIFEST PARA CONFERÊNCIA
+      # =========================================================
+      - name: Verify GPS Configuration
+        working-directory: project
+        shell: bash
+        run: |
+
+          echo "=========================================="
+          echo "ANDROID MANIFEST"
+          echo "=========================================="
+
+          cat android/app/src/main/AndroidManifest.xml
 
           echo ""
-          echo "Permissões encontradas:"
-          grep 'uses-permission' "$MANIFEST" || true
+          echo "=========================================="
+          echo "VERIFICANDO GPS"
+          echo "=========================================="
 
-      # ==================================================
-      # 12. GARANTIR NOME DO APP
-      # ==================================================
+          grep "ACCESS_FINE_LOCATION" \
+            android/app/src/main/AndroidManifest.xml
 
+          grep "ACCESS_COARSE_LOCATION" \
+            android/app/src/main/AndroidManifest.xml
+
+          echo "GPS configurado corretamente!"
+
+
+      # =========================================================
+      # 13. NOME DO APP
+      # =========================================================
       - name: Configure App Name
         working-directory: project
         shell: bash
@@ -335,17 +402,46 @@ jobs:
 
           if [ -f "$STRINGS" ]; then
 
-              sed -i \
-                's|<string name="app_name">.*</string>|<string name="app_name">Geoárvore</string>|' \
-                "$STRINGS"
+            python3 <<'PY'
+
+          from pathlib import Path
+          import re
+
+          path = Path(
+              "android/app/src/main/res/values/strings.xml"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          text = re.sub(
+              r'<string name="app_name">.*?</string>',
+              '<string name="app_name">Geoárvore</string>',
+              text,
+              flags=re.DOTALL
+          )
+
+          text = re.sub(
+              r'<string name="title_activity_main">.*?</string>',
+              '<string name="title_activity_main">Geoárvore</string>',
+              text,
+              flags=re.DOTALL
+          )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print("Nome Geoárvore configurado.")
+
+          PY
 
           fi
 
 
-      # ==================================================
-      # 13. LIMPAR BUILD
-      # ==================================================
-
+      # =========================================================
+      # 14. LIMPAR PROJETO ANDROID
+      # =========================================================
       - name: Clean Android
         working-directory: project/android
         shell: bash
@@ -353,14 +449,12 @@ jobs:
 
           chmod +x gradlew
 
-          ./gradlew clean \
-            --no-daemon
+          ./gradlew clean --no-daemon
 
 
-      # ==================================================
-      # 14. COMPILAR APK
-      # ==================================================
-
+      # =========================================================
+      # 15. GERAR APK
+      # =========================================================
       - name: Build APK
         working-directory: project/android
         shell: bash
@@ -373,10 +467,9 @@ jobs:
             --stacktrace
 
 
-      # ==================================================
-      # 15. VERIFICAR APK
-      # ==================================================
-
+      # =========================================================
+      # 16. VERIFICAR APK
+      # =========================================================
       - name: Check APK
         shell: bash
         run: |
@@ -385,12 +478,12 @@ jobs:
 
           if [ ! -f "$APK" ]; then
 
-              echo "ERRO: APK não foi criado!"
+            echo "ERRO: APK não foi criado!"
 
-              find project/android/app/build/outputs \
-                -type f 2>/dev/null || true
+            find project/android/app/build/outputs \
+              -type f 2>/dev/null || true
 
-              exit 1
+            exit 1
 
           fi
 
@@ -402,10 +495,9 @@ jobs:
           ls -lh "$APK"
 
 
-      # ==================================================
-      # 16. DISPONIBILIZAR APK
-      # ==================================================
-
+      # =========================================================
+      # 17. DISPONIBILIZAR APK
+      # =========================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
