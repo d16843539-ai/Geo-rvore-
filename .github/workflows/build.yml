@@ -35,15 +35,17 @@ jobs:
       # =========================================================
       # 3. NODE
       # =========================================================
+      # NÃO usar cache:npm porque o projeto pode não possuir
+      # package-lock.json.
+      # =========================================================
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
 
       # =========================================================
-      # 4. ENCONTRAR ZIP
+      # 4. ENCONTRAR O ZIP
       # =========================================================
       - name: Find Project ZIP
         shell: bash
@@ -73,7 +75,7 @@ jobs:
           fi
 
           if [ -z "$ZIP" ]; then
-            echo "ERRO: Nenhum ZIP do GeoÁrvore encontrado."
+            echo "ERRO: ZIP do GeoÁrvore não encontrado!"
             exit 1
           fi
 
@@ -99,20 +101,18 @@ jobs:
 
           echo ""
           echo "======================================"
-          echo "CONTEÚDO EXTRAÍDO"
+          echo "CONTEÚDO DO ZIP"
           echo "======================================"
 
-          find temp_extract -maxdepth 4 -type f | sort
+          find temp_extract -maxdepth 5 -type f | sort
 
 
       # =========================================================
-      # 6. LOCALIZAR A PASTA REAL DO PROJETO
+      # 6. ENCONTRAR INDEX.HTML
       # =========================================================
       - name: Locate Web Project
         shell: bash
         run: |
-
-          echo "Procurando index.html..."
 
           INDEX=$(find temp_extract \
             -type f \
@@ -121,19 +121,17 @@ jobs:
             | head -n 1)
 
           if [ -z "$INDEX" ]; then
-            echo "ERRO: index.html não encontrado dentro do ZIP."
+            echo "ERRO: index.html não encontrado dentro do ZIP!"
             exit 1
           fi
 
-          echo "index.html encontrado em:"
+          echo "index.html encontrado:"
           echo "$INDEX"
 
           PROJECT_DIR=$(dirname "$INDEX")
 
-          echo "Pasta web encontrada:"
+          echo "Pasta do projeto:"
           echo "$PROJECT_DIR"
-
-          echo "WEB_SOURCE=$PROJECT_DIR" >> "$GITHUB_ENV"
 
           cp -r "$PROJECT_DIR"/. project/
 
@@ -142,7 +140,7 @@ jobs:
           echo "PROJETO COPIADO"
           echo "======================================"
 
-          find project -maxdepth 3 -type f | sort
+          find project -maxdepth 4 -type f | sort
 
 
       # =========================================================
@@ -153,37 +151,52 @@ jobs:
         shell: bash
         run: |
 
-          echo "Preparando pasta www..."
-
           rm -rf www
+
           mkdir -p www
 
-          # Copiar todos os arquivos do site para www
-          find . -maxdepth 1 -mindepth 1 \
-            ! -name "www" \
-            ! -name "android" \
-            ! -name "node_modules" \
-            -exec cp -r {} www/ \;
+          echo "Copiando arquivos do site para www..."
+
+          for item in * .[^.]*; do
+
+            if [ "$item" = "www" ]; then
+              continue
+            fi
+
+            if [ "$item" = "android" ]; then
+              continue
+            fi
+
+            if [ "$item" = "node_modules" ]; then
+              continue
+            fi
+
+            if [ -e "$item" ]; then
+              cp -r "$item" www/
+            fi
+
+          done
 
           echo ""
           echo "======================================"
-          echo "CONTEÚDO DE WWW"
+          echo "ARQUIVOS WWW"
           echo "======================================"
 
-          find www -maxdepth 4 -type f | sort
+          find www -maxdepth 5 -type f | sort
 
           if [ ! -f "www/index.html" ]; then
-            echo "ERRO: www/index.html não foi criado."
+            echo "ERRO: www/index.html não existe!"
             exit 1
           fi
 
-          echo "www/index.html encontrado!"
+          echo ""
+          echo "www/index.html encontrado com sucesso."
 
 
       # =========================================================
       # 8. CORRIGIR INDEX.HTML
       # =========================================================
-      - name: Fix index.html
+      - name: Fix Web Paths
         working-directory: project
         shell: bash
         run: |
@@ -196,35 +209,47 @@ jobs:
           index = Path("www/index.html")
 
           if not index.exists():
-              raise SystemExit("ERRO: www/index.html não existe.")
+              raise SystemExit(
+                  "ERRO: www/index.html não encontrado."
+              )
 
-          content = index.read_text(encoding="utf-8")
-
-          # -----------------------------------------------------
-          # BASE HREF
-          # -----------------------------------------------------
-
-          content = re.sub(
-              r'<base\s+href\s*=\s*["\'][^"\']*["\']\s*/?>',
-              '<base href="./">',
-              content,
-              flags=re.IGNORECASE
+          content = index.read_text(
+              encoding="utf-8"
           )
 
-          if not re.search(r'<base\s+href=', content, re.IGNORECASE):
+          # -----------------------------------------------------
+          # Corrigir BASE HREF
+          # -----------------------------------------------------
 
-              if re.search(r'<head[^>]*>', content, re.IGNORECASE):
+          base_pattern = r'<base\s+href\s*=\s*["\'][^"\']*["\']\s*/?>'
 
-                  content = re.sub(
-                      r'(<head[^>]*>)',
-                      r'\1\n<base href="./">',
-                      content,
-                      count=1,
-                      flags=re.IGNORECASE
-                  )
+          if re.search(
+              base_pattern,
+              content,
+              flags=re.IGNORECASE
+          ):
+
+              content = re.sub(
+                  base_pattern,
+                  '<base href="./">',
+                  content,
+                  flags=re.IGNORECASE
+              )
+
+          else:
+
+              head_pattern = r'(<head[^>]*>)'
+
+              content = re.sub(
+                  head_pattern,
+                  r'\1\n<base href="./">',
+                  content,
+                  count=1,
+                  flags=re.IGNORECASE
+              )
 
           # -----------------------------------------------------
-          # CORRIGIR CAMINHOS ABSOLUTOS
+          # Corrigir caminhos absolutos
           # -----------------------------------------------------
 
           content = re.sub(
@@ -234,15 +259,18 @@ jobs:
               flags=re.IGNORECASE
           )
 
-          index.write_text(content, encoding="utf-8")
+          index.write_text(
+              content,
+              encoding="utf-8"
+          )
 
-          print("index.html corrigido com sucesso.")
+          print("index.html corrigido.")
 
           PY
 
 
       # =========================================================
-      # 9. GARANTIR CAPACITOR CONFIG
+      # 9. CRIAR/CORRIGIR CAPACITOR CONFIG
       # =========================================================
       - name: Configure Capacitor
         working-directory: project
@@ -259,65 +287,86 @@ jobs:
           if config.exists():
 
               try:
+
                   data = json.loads(
-                      config.read_text(encoding="utf-8")
+                      config.read_text(
+                          encoding="utf-8"
+                      )
                   )
+
               except Exception:
+
                   data = {}
 
           else:
-              data = {
-                  "appId": "com.geoarvore.app",
-                  "appName": "GeoÁrvore"
-              }
+
+              data = {}
+
+          data["appId"] = data.get(
+              "appId",
+              "com.geoarvore.app"
+          )
 
           data["appName"] = "GeoÁrvore"
+
+          # MUITO IMPORTANTE:
+          # Os arquivos do aplicativo estão em www/
           data["webDir"] = "www"
 
-          if "server" not in data:
-              data["server"] = {}
-
-          data["server"]["androidScheme"] = "https"
-
           config.write_text(
-              json.dumps(data, indent=2, ensure_ascii=False),
+              json.dumps(
+                  data,
+                  indent=2,
+                  ensure_ascii=False
+              ),
               encoding="utf-8"
           )
 
-          print("capacitor.config.json:")
-          print(config.read_text(encoding="utf-8"))
+          print(
+              config.read_text(
+                  encoding="utf-8"
+              )
+          )
 
           PY
 
 
       # =========================================================
-      # 10. VERIFICAR PACKAGE.JSON
+      # 10. GARANTIR PACKAGE.JSON
       # =========================================================
-      - name: Verify Package
+      - name: Prepare NPM
         working-directory: project
         shell: bash
         run: |
 
-          if [ ! -f "package.json" ]; then
+          if [ -f "package.json" ]; then
+
+            echo "package.json encontrado."
+
+          else
 
             echo "package.json não encontrado."
-
             echo "Criando package.json..."
 
             cat > package.json <<'EOF'
-          {
-            "name": "geoarvore",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "@capacitor/core": "^7.0.0",
-              "@capacitor/android": "^7.0.0",
-              "@capacitor/cli": "^7.0.0"
-            }
-          }
-          EOF
+{
+  "name": "geoarvore",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0"
+  }
+}
+EOF
 
           fi
+
+          echo ""
+          echo "======================================"
+          echo "PACKAGE.JSON"
+          echo "======================================"
 
           cat package.json
 
@@ -331,9 +380,17 @@ jobs:
         run: |
 
           if [ -f "package-lock.json" ]; then
+
+            echo "package-lock.json encontrado."
             npm ci
+
           else
+
+            echo "package-lock.json não encontrado."
+            echo "Usando npm install."
+
             npm install
+
           fi
 
 
@@ -345,19 +402,25 @@ jobs:
         shell: bash
         run: |
 
+          echo "Versão do Capacitor:"
+
           npx cap --version
 
           echo ""
-          echo "Web directory:"
-          ls -la www
+          echo "Conteúdo de www:"
+
+          find www -maxdepth 4 -type f | sort
 
           echo ""
-          echo "Index:"
-          ls -lh www/index.html
+
+          if [ ! -f "www/index.html" ]; then
+            echo "ERRO: index.html não existe!"
+            exit 1
+          fi
 
 
       # =========================================================
-      # 13. CRIAR ANDROID SE NECESSÁRIO
+      # 13. CRIAR PROJETO ANDROID
       # =========================================================
       - name: Ensure Android
         working-directory: project
@@ -366,8 +429,8 @@ jobs:
 
           if [ ! -d "android" ]; then
 
-            echo "Pasta Android não encontrada."
-            echo "Criando projeto Android..."
+            echo "Projeto Android não encontrado."
+            echo "Criando Android..."
 
             npx cap add android
 
@@ -386,11 +449,50 @@ jobs:
         shell: bash
         run: |
 
+          echo "Sincronizando Capacitor..."
+
           npx cap sync android
+
+          echo ""
+          echo "Capacitor sincronizado."
 
 
       # =========================================================
-      # 15. GARANTIR PERMISSÕES GPS
+      # 15. VERIFICAR SE OS ARQUIVOS CHEGARAM AO ANDROID
+      # =========================================================
+      - name: Verify Web Assets
+        working-directory: project
+        shell: bash
+        run: |
+
+          echo "======================================"
+          echo "ARQUIVOS WEB NO ANDROID"
+          echo "======================================"
+
+          find android/app/src/main/assets \
+            -maxdepth 5 \
+            -type f \
+            | sort \
+            | head -200
+
+          if [ ! -f "android/app/src/main/assets/public/index.html" ]; then
+
+            echo ""
+            echo "ERRO GRAVE:"
+            echo "O index.html não chegou ao Android."
+            echo "A compilação seria capaz de gerar APK,"
+            echo "mas o aplicativo poderia abrir em branco."
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "index.html encontrado dentro do APK."
+
+
+      # =========================================================
+      # 16. CONFIGURAR GPS
       # =========================================================
       - name: Configure GPS
         working-directory: project
@@ -407,11 +509,14 @@ jobs:
           )
 
           if not manifest.exists():
+
               raise SystemExit(
                   "AndroidManifest.xml não encontrado."
               )
 
-          text = manifest.read_text(encoding="utf-8")
+          text = manifest.read_text(
+              encoding="utf-8"
+          )
 
           permissions = [
               "android.permission.INTERNET",
@@ -421,52 +526,53 @@ jobs:
 
           for permission in permissions:
 
-              tag = (
-                  f'<uses-permission android:name="{permission}" />'
+              pattern = (
+                  r'<uses-permission\s+'
+                  r'android:name="'
+                  + re.escape(permission)
+                  + r'"\s*/>'
               )
 
-              if permission not in text:
+              if not re.search(pattern, text):
 
-                  text = text.replace(
-                      '<manifest',
-                      '<manifest',
-                      1
+                  manifest_start = text.find(">")
+
+                  tag = (
+                      '\n    <uses-permission '
+                      'android:name="'
+                      + permission
+                      + '" />'
                   )
-
-                  position = text.find(">")
 
                   text = (
-                      text[:position + 1]
-                      + "\n    "
+                      text[:manifest_start + 1]
                       + tag
-                      + text[position + 1:]
+                      + text[manifest_start + 1:]
                   )
 
-          # Permitir conteúdo necessário ao WebView
-          text = re.sub(
-              r'\s+android:usesCleartextTraffic="[^"]*"',
-              '',
-              text
-          )
+          # Permitir HTTP caso alguma parte do projeto utilize.
+          if "android:usesCleartextTraffic" not in text:
 
-          text = text.replace(
-              '<application',
-              '<application android:usesCleartextTraffic="true"',
-              1
-          )
+              text = text.replace(
+                  "<application",
+                  '<application android:usesCleartextTraffic="true"',
+                  1
+              )
 
           manifest.write_text(
               text,
               encoding="utf-8"
           )
 
-          print("Permissões GPS configuradas.")
+          print(
+              "Permissões de GPS configuradas."
+          )
 
           PY
 
 
       # =========================================================
-      # 16. CONFIGURAR ÍCONE
+      # 17. CONFIGURAR ÍCONE
       # =========================================================
       - name: Configure App Icon
         working-directory: project
@@ -476,25 +582,32 @@ jobs:
           ICON=""
 
           if [ -f "www/planta-cobra.png" ]; then
+
             ICON="www/planta-cobra.png"
 
           elif [ -f "planta-cobra.png" ]; then
+
             ICON="planta-cobra.png"
 
           else
+
             ICON=$(find . \
               -type f \
               -iname "planta-cobra.png" \
+              -not -path "*/node_modules/*" \
               | head -n 1)
+
           fi
 
           if [ -z "$ICON" ]; then
 
-            echo "AVISO: planta-cobra.png não encontrado."
+            echo "AVISO:"
+            echo "planta-cobra.png não encontrado."
 
           else
 
-            echo "Ícone encontrado: $ICON"
+            echo "Ícone encontrado:"
+            echo "$ICON"
 
             RES="android/app/src/main/res"
 
@@ -504,6 +617,7 @@ jobs:
             mkdir -p "$RES/mipmap-xxhdpi"
             mkdir -p "$RES/mipmap-xxxhdpi"
 
+            # Remover ícones adaptativos antigos
             rm -rf "$RES/mipmap-anydpi-v26"
 
             for folder in \
@@ -528,35 +642,52 @@ jobs:
 
 
       # =========================================================
-      # 17. VERIFICAR ARQUIVOS FINAIS
+      # 18. CONFIGURAR MANIFEST DO ÍCONE
       # =========================================================
-      - name: Verify Android Assets
+      - name: Configure Manifest Icon
         working-directory: project
         shell: bash
         run: |
 
-          echo "======================================"
-          echo "WEB ASSETS"
-          echo "======================================"
+          python3 <<'PY'
 
-          find www -maxdepth 3 -type f | sort
+          from pathlib import Path
+          import re
 
-          echo ""
-          echo "======================================"
-          echo "ANDROID ASSETS"
-          echo "======================================"
+          manifest = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
 
-          find android/app/src/main/res \
-            -maxdepth 2 \
-            -type f \
-            | sort \
-            | head -100
+          text = manifest.read_text(
+              encoding="utf-8"
+          )
+
+          text = re.sub(
+              r'android:icon="[^"]*"',
+              'android:icon="@mipmap/ic_launcher"',
+              text
+          )
+
+          text = re.sub(
+              r'android:roundIcon="[^"]*"',
+              'android:roundIcon="@mipmap/ic_launcher_round"',
+              text
+          )
+
+          manifest.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print("Ícone configurado no Manifest.")
+
+          PY
 
 
       # =========================================================
-      # 18. COMPILAR APK
+      # 19. LIMPAR ANDROID
       # =========================================================
-      - name: Build APK
+      - name: Clean Android
         working-directory: project/android
         shell: bash
         run: |
@@ -565,13 +696,22 @@ jobs:
 
           ./gradlew clean --no-daemon
 
+
+      # =========================================================
+      # 20. COMPILAR APK
+      # =========================================================
+      - name: Build APK
+        working-directory: project/android
+        shell: bash
+        run: |
+
           ./gradlew assembleDebug \
             --no-daemon \
             --stacktrace
 
 
       # =========================================================
-      # 19. VERIFICAR APK
+      # 21. VERIFICAR APK
       # =========================================================
       - name: Verify APK
         shell: bash
@@ -582,16 +722,21 @@ jobs:
           if [ ! -f "$APK" ]; then
 
             echo "ERRO: APK não foi criado."
+
             exit 1
 
           fi
 
-          echo "APK criado com sucesso:"
+          echo ""
+          echo "======================================"
+          echo "APK GERADO COM SUCESSO"
+          echo "======================================"
+
           ls -lh "$APK"
 
 
       # =========================================================
-      # 20. UPLOAD APK
+      # 22. ENVIAR APK
       # =========================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
