@@ -6,24 +6,28 @@ on:
       - principal
       - main
       - master
+
   workflow_dispatch:
 
 jobs:
   build:
+
     runs-on: ubuntu-latest
 
     steps:
 
       # =====================================================
-      # 1. BAIXAR O REPOSITÓRIO
+      # 1 - BAIXAR REPOSITÓRIO
       # =====================================================
+
       - name: Checkout
         uses: actions/checkout@v4
 
 
       # =====================================================
-      # 2. CONFIGURAR JAVA
+      # 2 - JAVA
       # =====================================================
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -32,8 +36,9 @@ jobs:
 
 
       # =====================================================
-      # 3. CONFIGURAR NODE
+      # 3 - NODE
       # =====================================================
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -41,13 +46,14 @@ jobs:
 
 
       # =====================================================
-      # 4. ENCONTRAR GeoÁrvore.zip
+      # 4 - ENCONTRAR GeoÁrvore.zip
       # =====================================================
+
       - name: Encontrar GeoÁrvore.zip
         shell: bash
         run: |
 
-          echo "Arquivos do repositório:"
+          echo "Arquivos encontrados:"
           find . -maxdepth 2 -type f | sort
 
           ZIP=""
@@ -76,8 +82,9 @@ jobs:
 
 
       # =====================================================
-      # 5. EXTRAIR O PROJETO
+      # 5 - EXTRAIR PROJETO
       # =====================================================
+
       - name: Extrair projeto
         shell: bash
         run: |
@@ -92,22 +99,16 @@ jobs:
           echo "Projeto extraído."
           echo ""
 
-          find project -maxdepth 2 -type f \
-            \( -name "package.json" \
-            -o -name "capacitor.config.json" \
-            -o -name "index.html" \
-            -o -name "manifest.json" \) \
-            -print
-
 
       # =====================================================
-      # 6. VERIFICAR PROJETO
+      # 6 - VERIFICAR PROJETO
       # =====================================================
+
       - name: Verificar projeto
         shell: bash
         run: |
 
-          echo "Verificando projeto..."
+          echo "Verificando estrutura..."
 
           test -f project/package.json || {
             echo "ERRO: package.json não encontrado!"
@@ -129,13 +130,14 @@ jobs:
             exit 1
           }
 
-          echo "Projeto encontrado corretamente!"
+          echo "Projeto encontrado!"
 
 
       # =====================================================
-      # 7. PEGAR O ÍCONE planta-cobra.png
+      # 7 - PEGAR PLANTA
       # =====================================================
-      - name: Preparar ícone
+
+      - name: Preparar planta-cobra.png
         shell: bash
         run: |
 
@@ -143,38 +145,35 @@ jobs:
 
           if [ -f "planta-cobra.png" ]; then
 
-            echo "Ícone encontrado na raiz do repositório."
-
             cp planta-cobra.png \
               project/www/planta-cobra.png
 
           elif [ -f "project/planta-cobra.png" ]; then
-
-            echo "Ícone encontrado dentro do projeto."
 
             cp project/planta-cobra.png \
               project/www/planta-cobra.png
 
           elif [ -f "project/www/planta-cobra.png" ]; then
 
-            echo "Ícone já está em www."
+            echo "A planta já está em www."
 
           else
 
-            echo "ERRO: planta-cobra.png não encontrado!"
+            echo "ERRO: planta-cobra.png não encontrada!"
 
             exit 1
 
           fi
 
           echo ""
-          echo "Ícone:"
+          echo "Ícone encontrado:"
           file project/www/planta-cobra.png
 
 
       # =====================================================
-      # 8. INSTALAR DEPENDÊNCIAS
+      # 8 - INSTALAR DEPENDÊNCIAS
       # =====================================================
+
       - name: Instalar dependências
         working-directory: project
         shell: bash
@@ -192,8 +191,9 @@ jobs:
 
 
       # =====================================================
-      # 9. SINCRONIZAR CAPACITOR
+      # 9 - SINCRONIZAR CAPACITOR
       # =====================================================
+
       - name: Sincronizar Capacitor
         working-directory: project
         shell: bash
@@ -203,8 +203,46 @@ jobs:
 
 
       # =====================================================
-      # 10. CONFIGURAR ÍCONE
+      # 10 - FORÇAR ARQUIVOS DO WWW PARA O APK
       # =====================================================
+
+      - name: Copiar aplicação Web para Android
+        working-directory: project
+        shell: bash
+        run: |
+
+          echo "Atualizando arquivos do aplicativo..."
+
+          PUBLIC="android/app/src/main/assets/public"
+
+          # Apagar conteúdo antigo
+          rm -rf "$PUBLIC"
+
+          # Criar novamente
+          mkdir -p "$PUBLIC"
+
+          # Copiar exatamente o conteúdo de www
+          cp -R www/. "$PUBLIC/"
+
+          echo ""
+          echo "Arquivos copiados:"
+          find "$PUBLIC" -maxdepth 2 -type f -printf '%p\n'
+
+          echo ""
+          echo "Tamanho do index.html:"
+
+          wc -c "$PUBLIC/index.html"
+
+          echo ""
+          echo "Tamanho do index.html original:"
+
+          wc -c www/index.html
+
+
+      # =====================================================
+      # 11 - CONFIGURAR ÍCONE
+      # =====================================================
+
       - name: Configurar ícone
         working-directory: project
         shell: bash
@@ -212,7 +250,7 @@ jobs:
 
           RES="android/app/src/main/res"
 
-          echo "Configurando ícone GeoÁrvore..."
+          echo "Configurando ícone..."
 
           # Remover ícones adaptativos antigos
           rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
@@ -230,7 +268,8 @@ jobs:
           mkdir -p "$RES/mipmap-xxhdpi"
           mkdir -p "$RES/mipmap-xxxhdpi"
 
-          # Ícone principal
+          # Ícone normal
+
           cp www/planta-cobra.png \
             "$RES/mipmap-mdpi/ic_launcher.png"
 
@@ -247,6 +286,7 @@ jobs:
             "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
           # Ícone redondo
+
           cp www/planta-cobra.png \
             "$RES/mipmap-mdpi/ic_launcher_round.png"
 
@@ -262,18 +302,17 @@ jobs:
           cp www/planta-cobra.png \
             "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
 
-          echo "Ícone configurado com sucesso."
+          echo "Ícone configurado!"
 
 
       # =====================================================
-      # 11. CONFIGURAR MANIFEST
+      # 12 - CONFIGURAR MANIFEST
       # =====================================================
-      - name: Configurar Manifest
+
+      - name: Configurar AndroidManifest
         working-directory: project
         shell: bash
         run: |
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
 
           python3 <<'PY'
 
@@ -284,7 +323,9 @@ jobs:
               "android/app/src/main/AndroidManifest.xml"
           )
 
-          text = path.read_text(encoding="utf-8")
+          text = path.read_text(
+              encoding="utf-8"
+          )
 
           # -------------------------------------------------
           # ÍCONE
@@ -302,20 +343,68 @@ jobs:
               text
           )
 
+          # -------------------------------------------------
+          # GPS
+          # -------------------------------------------------
+
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+              '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
+          ]
+
+          # Remover permissões antigas
+
+          for permission in permissions:
+
+              pattern = (
+                  r'\s*'
+                  + re.escape(permission)
+              )
+
+              text = re.sub(
+                  pattern,
+                  '',
+                  text
+              )
+
+          # Inserir permissões depois da abertura do manifest
+
+          marker = (
+              '<manifest '
+              'xmlns:android="http://schemas.android.com/apk/res/android">'
+          )
+
+          if marker not in text:
+
+              raise SystemExit(
+                  "ERRO: Manifest inválido!"
+              )
+
+          text = text.replace(
+              marker,
+              marker
+              + "\n\n    "
+              + "\n    ".join(permissions),
+              1
+          )
+
           path.write_text(
               text,
               encoding="utf-8"
           )
 
-          print("Manifest configurado.")
+          print("Manifest configurado!")
+          print("GPS configurado!")
 
           PY
 
 
       # =====================================================
-      # 12. GARANTIR NOME DO APP
+      # 13 - CONFIGURAR NOME
       # =====================================================
-      - name: Configurar nome
+
+      - name: Configurar nome do aplicativo
         working-directory: project
         shell: bash
         run: |
@@ -333,11 +422,20 @@ jobs:
               "android/app/src/main/res/values/strings.xml"
           )
 
-          text = path.read_text(encoding="utf-8")
+          text = path.read_text(
+              encoding="utf-8"
+          )
 
           text = re.sub(
               r'<string name="app_name">.*?</string>',
               '<string name="app_name">Geoárvore</string>',
+              text,
+              flags=re.DOTALL
+          )
+
+          text = re.sub(
+              r'<string name="title_activity_main">.*?</string>',
+              '<string name="title_activity_main">Geoárvore</string>',
               text,
               flags=re.DOTALL
           )
@@ -347,7 +445,7 @@ jobs:
               encoding="utf-8"
           )
 
-          print("Nome Geoárvore configurado.")
+          print("Nome configurado!")
 
           PY
 
@@ -355,9 +453,47 @@ jobs:
 
 
       # =====================================================
-      # 13. LIMPAR ANDROID
+      # 14 - CONFERIR A APLICAÇÃO
       # =====================================================
-      - name: Limpar projeto
+
+      - name: Conferir arquivos finais
+        working-directory: project
+        shell: bash
+        run: |
+
+          echo "=========================================="
+          echo "ARQUIVOS WEB DENTRO DO APK"
+          echo "=========================================="
+
+          ls -lh android/app/src/main/assets/public/
+
+          echo ""
+
+          echo "index.html:"
+
+          wc -c android/app/src/main/assets/public/index.html
+
+          echo ""
+
+          echo "planta-cobra.png:"
+
+          ls -lh android/app/src/main/assets/public/planta-cobra.png
+
+          echo ""
+
+          echo "=========================================="
+          echo "PERMISSÕES"
+          echo "=========================================="
+
+          grep "uses-permission" \
+            android/app/src/main/AndroidManifest.xml
+
+
+      # =====================================================
+      # 15 - LIMPAR ANDROID
+      # =====================================================
+
+      - name: Limpar Android
         working-directory: project/android
         shell: bash
         run: |
@@ -368,8 +504,9 @@ jobs:
 
 
       # =====================================================
-      # 14. GERAR APK
+      # 16 - GERAR APK
       # =====================================================
+
       - name: Gerar APK
         working-directory: project/android
         shell: bash
@@ -383,8 +520,9 @@ jobs:
 
 
       # =====================================================
-      # 15. VERIFICAR APK
+      # 17 - VERIFICAR APK
       # =====================================================
+
       - name: Verificar APK
         shell: bash
         run: |
@@ -411,8 +549,9 @@ jobs:
 
 
       # =====================================================
-      # 16. DISPONIBILIZAR APK
+      # 18 - DISPONIBILIZAR APK
       # =====================================================
+
       - name: Enviar APK
         uses: actions/upload-artifact@v4
         with:
