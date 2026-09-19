@@ -38,7 +38,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          
+
+
       # =========================================================
       # 4. ENCONTRAR O ZIP
       # =========================================================
@@ -60,9 +61,12 @@ jobs:
           elif [ -f "GeoArvore_atualizado.zip" ]; then
             ZIP="GeoArvore_atualizado.zip"
 
+          elif [ -f "GeoArvore_atualizado (1).zip" ]; then
+            ZIP="GeoArvore_atualizado (1).zip"
+
           else
             ZIP=$(find . -maxdepth 1 -type f \
-              -iname "Geo*Árvore*.zip" -o -iname "Geo*Arvore*.zip" | head -n 1)
+              \( -iname "Geo*Árvore*.zip" -o -iname "Geo*Arvore*.zip" \) | head -n 1)
           fi
 
           if [ -z "$ZIP" ]; then
