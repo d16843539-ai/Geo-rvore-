@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Baixar projeto
         uses: actions/checkout@v4
 
@@ -22,7 +23,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Preparar aplicativo
+      - name: Criar aplicativo
+        shell: bash
         run: |
           set -e
 
@@ -33,7 +35,10 @@ jobs:
             exit 1
           fi
 
+          echo "ZIP encontrado: $ZIP"
+
           rm -rf projeto app
+
           mkdir projeto
           mkdir app
 
@@ -41,19 +46,41 @@ jobs:
 
           mkdir -p app/www
 
-          find projeto -mindepth 1 -maxdepth 1 \
-            ! -name "android" \
-            ! -name "www" \
-            ! -name ".github" \
-            -exec cp -R {} app/www/ \;
+          # ==================================================
+          # USAR O INDEX.HTML CORRETO DA RAIZ DO ZIP
+          # ==================================================
+
+          cp projeto/index.html app/www/index.html
+
+          # ==================================================
+          # COPIAR OUTROS ARQUIVOS DO PROJETO
+          # ==================================================
+
+          if [ -f projeto/manifest.json ]; then
+            cp projeto/manifest.json app/www/manifest.json
+          fi
+
+          if [ -f projeto/planta-cobra.png ]; then
+            cp projeto/planta-cobra.png app/www/planta-cobra.png
+          elif [ -f projeto/www/planta-cobra.png ]; then
+            cp projeto/www/planta-cobra.png app/www/planta-cobra.png
+          fi
+
+          # ==================================================
+          # VERIFICAR HTML
+          # ==================================================
+
+          echo "Tamanho do HTML:"
+          wc -c app/www/index.html
 
           if [ ! -s app/www/index.html ]; then
-            echo "ERRO: index.html principal não encontrado."
+            echo "ERRO: index.html está vazio."
             exit 1
           fi
 
-          echo "index.html encontrado:"
-          wc -c app/www/index.html
+          # ==================================================
+          # CRIAR CAPACITOR
+          # ==================================================
 
           cd app
 
@@ -67,11 +94,17 @@ jobs:
 
           npx cap sync android
 
-      - name: Configurar GPS
+
+      - name: Configurar GPS e ícone
+        shell: bash
         run: |
           set -e
 
           MANIFEST="app/android/app/src/main/AndroidManifest.xml"
+
+          # ==================================================
+          # GPS
+          # ==================================================
 
           sed -i '/<manifest /a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
 
@@ -79,40 +112,118 @@ jobs:
 
           sed -i '/<manifest /a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
 
-      - name: Configurar ícone
-        run: |
-          set -e
+          # ==================================================
+          # ENCONTRAR ÍCONE
+          # ==================================================
 
-          if [ -f "projeto/planta-cobra.png" ]; then
-            ICON="projeto/planta-cobra.png"
-          elif [ -f "app/www/planta-cobra.png" ]; then
+          if [ -f "app/www/planta-cobra.png" ]; then
             ICON="app/www/planta-cobra.png"
           else
-            echo "Ícone não encontrado. Continuando sem trocar o ícone."
-            exit 0
+            echo "ERRO: planta-cobra.png não encontrado."
+            exit 1
           fi
+
+          echo "Ícone encontrado:"
+          file "$ICON"
 
           RES="app/android/app/src/main/res"
 
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+          # ==================================================
+          # CRIAR PASTAS
+          # ==================================================
 
-          cp "$ICON" "$RES/mipmap-mdpi/ic_launcher.png"
-          cp "$ICON" "$RES/mipmap-mdpi/ic_launcher_round.png"
+          mkdir -p "$RES/drawable"
+          mkdir -p "$RES/mipmap-mdpi"
+          mkdir -p "$RES/mipmap-hdpi"
+          mkdir -p "$RES/mipmap-xhdpi"
+          mkdir -p "$RES/mipmap-xxhdpi"
+          mkdir -p "$RES/mipmap-xxxhdpi"
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          mkdir -p "$RES/values"
 
-          cp "$ICON" "$RES/mipmap-hdpi/ic_launcher.png"
-          cp "$ICON" "$RES/mipmap-hdpi/ic_launcher_round.png"
+          # ==================================================
+          # COPIAR ÍCONE
+          # ==================================================
 
-          cp "$ICON" "$RES/mipmap-xhdpi/ic_launcher.png"
-          cp "$ICON" "$RES/mipmap-xhdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/drawable/geoarvore_icon.png"
 
-          cp "$ICON" "$RES/mipmap-xxhdpi/ic_launcher.png"
-          cp "$ICON" "$RES/mipmap-xxhdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-mdpi/ic_geoarvore.png"
+          cp "$ICON" "$RES/mipmap-hdpi/ic_geoarvore.png"
+          cp "$ICON" "$RES/mipmap-xhdpi/ic_geoarvore.png"
+          cp "$ICON" "$RES/mipmap-xxhdpi/ic_geoarvore.png"
+          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_geoarvore.png"
 
-          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_launcher.png"
-          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-mdpi/ic_geoarvore_round.png"
+          cp "$ICON" "$RES/mipmap-hdpi/ic_geoarvore_round.png"
+          cp "$ICON" "$RES/mipmap-xhdpi/ic_geoarvore_round.png"
+          cp "$ICON" "$RES/mipmap-xxhdpi/ic_geoarvore_round.png"
+          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_geoarvore_round.png"
+
+          # ==================================================
+          # FUNDO BRANCO
+          # ==================================================
+
+          cat > "$RES/values/geoarvore_colors.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="geoarvore_icon_background">#FFFFFF</color>
+          </resources>
+          EOF
+
+          # ==================================================
+          # ÍCONE ADAPTATIVO
+          # ==================================================
+
+          cat > "$RES/mipmap-anydpi-v26/ic_geoarvore.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/geoarvore_icon_background" />
+              <foreground android:drawable="@drawable/geoarvore_icon" />
+          </adaptive-icon>
+          EOF
+
+          cat > "$RES/mipmap-anydpi-v26/ic_geoarvore_round.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/geoarvore_icon_background" />
+              <foreground android:drawable="@drawable/geoarvore_icon" />
+          </adaptive-icon>
+          EOF
+
+          # ==================================================
+          # TROCAR ÍCONE DO APLICATIVO
+          # ==================================================
+
+          sed -i 's|android:icon="@mipmap/ic_launcher"|android:icon="@mipmap/ic_geoarvore"|g' "$MANIFEST"
+
+          sed -i 's|android:roundIcon="@mipmap/ic_launcher_round"|android:roundIcon="@mipmap/ic_geoarvore_round"|g' "$MANIFEST"
+
+          echo "GPS configurado."
+          echo "Ícone configurado."
+
+
+      - name: Garantir arquivos do aplicativo
+        shell: bash
+        run: |
+          set -e
+
+          PUBLIC="app/android/app/src/main/assets/public"
+
+          rm -rf "$PUBLIC"
+
+          mkdir -p "$PUBLIC"
+
+          cp -R app/www/. "$PUBLIC/"
+
+          echo "HTML dentro do APK:"
+          wc -c "$PUBLIC/index.html"
+
+          echo "Arquivos:"
+          find "$PUBLIC" -maxdepth 1 -type f
+
 
       - name: Compilar APK
+        shell: bash
         run: |
           set -e
 
@@ -120,10 +231,28 @@ jobs:
 
           chmod +x gradlew
 
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Enviar APK
+
+      - name: Verificar APK
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERRO: APK não foi criado."
+            exit 1
+          fi
+
+          echo "APK criado:"
+          ls -lh "$APK"
+
+
+      - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
           name: GeoArvore-APK
           path: app/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
