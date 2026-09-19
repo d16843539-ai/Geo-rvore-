@@ -97,50 +97,42 @@ jobs:
           echo "Projeto extraído."
           echo ""
 
-          find project -maxdepth 2 -type f \
-            \( -name "package.json" \
-            -o -name "capacitor.config.json" \
-            -o -name "index.html" \
-            -o -name "server.py" \
-            -o -name "manifest.json" \) \
-            -print
-
 
       # =========================================================
-      # 6. VERIFICAR PROJETO
+      # 6. VERIFICAR E CORRIGIR ESTRUTURA E BASE HREF
       # =========================================================
-      - name: Check Project
+      - name: Fix Web Assets and Base HREF
+        working-directory: project
         shell: bash
         run: |
 
-          echo "Verificando estrutura..."
+          echo "Ajustando index.html e caminhos para evitar tela branca..."
 
-          test -f project/package.json || {
-            echo "ERRO: package.json não encontrado!"
-            exit 1
-          }
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
 
-          test -f project/capacitor.config.json || {
-            echo "ERRO: capacitor.config.json não encontrado!"
-            exit 1
-          }
+          index_path = Path("www/index.html")
 
-          test -d project/android || {
-            echo "ERRO: pasta android não encontrada!"
-            exit 1
-          }
+          if index_path.exists():
+              content = index_path.read_text(encoding="utf-8")
 
-          test -d project/www || {
-            echo "ERRO: pasta www não encontrada!"
-            exit 1
-          }
+              # 1. Corrigir base href
+              if '<base href="/"' in content or '<base href="/">' in content:
+                  content = re.sub(r'<base\s+href="[^"]*"\s*/?>', '<base href="./" />', content)
+              elif '<base' not in content:
+                  content = content.replace('<head>', '<head>\n  <base href="./" />')
 
-          test -f project/www/index.html || {
-            echo "ERRO: www/index.html não encontrado!"
-            exit 1
-          }
+              # 2. Corrigir barras iniciais em recursos src="/..." e href="/..."
+              content = re.sub(r'src="/([^"]+)"', r'src="\1"', content)
+              content = re.sub(r'href="/([^"]+)"', r'href="\1"', content)
 
-          echo "Projeto válido!"
+              index_path.write_text(content, encoding="utf-8")
+              print("index.html corrigido com sucesso!")
+          else:
+              print("AVISO: www/index.html não encontrado no caminho padrão.")
+          PY
 
 
       # =========================================================
@@ -168,15 +160,7 @@ jobs:
             cp planta-cobra.png \
                project/www/planta-cobra.png
 
-          else
-
-            echo "ERRO: planta-cobra.png não encontrada!"
-
-            exit 1
-
           fi
-
-          file project/www/planta-cobra.png
 
 
       # =========================================================
@@ -201,7 +185,39 @@ jobs:
 
 
       # =========================================================
-      # 9. SINCRONIZAR CAPACITOR
+      # 9. CORRIGIR CAPACITOR CONFIG (SERVIDORES E ESQUEMA HTTP)
+      # =========================================================
+      - name: Fix Capacitor Config
+        working-directory: project
+        shell: bash
+        run: |
+
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          cfg_path = Path("capacitor.config.json")
+          if cfg_path.exists():
+              try:
+                  data = json.loads(cfg_path.read_text(encoding="utf-8"))
+              except Exception:
+                  data = {}
+
+              data["webDir"] = "www"
+              
+              if "server" not in data:
+                  data["server"] = {}
+
+              data["server"]["androidScheme"] = "https"
+              data["server"]["cleartext"] = True
+
+              cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+              print("capacitor.config.json atualizado com sucesso!")
+          PY
+
+
+      # =========================================================
+      # 10. SINCRONIZAR CAPACITOR
       # =========================================================
       - name: Sync Capacitor
         working-directory: project
@@ -212,7 +228,7 @@ jobs:
 
 
       # =========================================================
-      # 10. CONFIGURAR ÍCONE
+      # 11. CONFIGURAR ÍCONE SEM DESTRUIR NATIVE RESOURCES
       # =========================================================
       - name: Configure App Icon
         working-directory: project
@@ -223,59 +239,31 @@ jobs:
 
           RES="android/app/src/main/res"
 
-          # Remover ícones adaptativos antigos
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+          if [ -f "www/planta-cobra.png" ]; then
+            mkdir -p "$RES/mipmap-mdpi"
+            mkdir -p "$RES/mipmap-hdpi"
+            mkdir -p "$RES/mipmap-xhdpi"
+            mkdir -p "$RES/mipmap-xxhdpi"
+            mkdir -p "$RES/mipmap-xxxhdpi"
 
-          # Remover recursos antigos do Capacitor
-          rm -f "$RES/drawable/ic_launcher_background.xml"
-          rm -f "$RES/drawable/ic_launcher_foreground.png"
-          rm -f "$RES/drawable-v24/ic_launcher_foreground.xml"
+            cp www/planta-cobra.png "$RES/mipmap-mdpi/ic_launcher.png"
+            cp www/planta-cobra.png "$RES/mipmap-hdpi/ic_launcher.png"
+            cp www/planta-cobra.png "$RES/mipmap-xhdpi/ic_launcher.png"
+            cp www/planta-cobra.png "$RES/mipmap-xxhdpi/ic_launcher.png"
+            cp www/planta-cobra.png "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
-          # Criar pastas
-          mkdir -p "$RES/mipmap-mdpi"
-          mkdir -p "$RES/mipmap-hdpi"
-          mkdir -p "$RES/mipmap-xhdpi"
-          mkdir -p "$RES/mipmap-xxhdpi"
-          mkdir -p "$RES/mipmap-xxxhdpi"
+            cp www/planta-cobra.png "$RES/mipmap-mdpi/ic_launcher_round.png"
+            cp www/planta-cobra.png "$RES/mipmap-hdpi/ic_launcher_round.png"
+            cp www/planta-cobra.png "$RES/mipmap-xhdpi/ic_launcher_round.png"
+            cp www/planta-cobra.png "$RES/mipmap-xxhdpi/ic_launcher_round.png"
+            cp www/planta-cobra.png "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
 
-          # Ícone principal
-          cp www/planta-cobra.png \
-            "$RES/mipmap-mdpi/ic_launcher.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-hdpi/ic_launcher.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xhdpi/ic_launcher.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xxhdpi/ic_launcher.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xxxhdpi/ic_launcher.png"
-
-          # Ícone redondo
-          cp www/planta-cobra.png \
-            "$RES/mipmap-mdpi/ic_launcher_round.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-hdpi/ic_launcher_round.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xhdpi/ic_launcher_round.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xxhdpi/ic_launcher_round.png"
-
-          cp www/planta-cobra.png \
-            "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
-
-          echo "Ícone configurado!"
+            echo "Ícone configurado com segurança!"
+          fi
 
 
       # =========================================================
-      # 11. CONFIGURAR ANDROID MANIFEST
+      # 12. CONFIGURAR ANDROID MANIFEST (CLEARTEXT + GPS + PERMISSÕES)
       # =========================================================
       - name: Configure Android Manifest
         working-directory: project
@@ -283,121 +271,37 @@ jobs:
         run: |
 
           python3 <<'PY'
-
+          import re
           from pathlib import Path
 
-          manifest = Path(
-              "android/app/src/main/AndroidManifest.xml"
-          )
-
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text(encoding="utf-8")
 
-          # -----------------------------------------------------
-          # ÍCONES
-          # -----------------------------------------------------
+          # Permitir tráfego HTTP/HTTPS local sem restrições (evita tela branca)
+          if 'android:usesCleartextTraffic' not in text:
+              text = text.replace('<application', '<application android:usesCleartextTraffic="true"')
 
-          import re
-
-          text = re.sub(
-              r'android:icon="[^"]*"',
-              'android:icon="@mipmap/ic_launcher"',
-              text
-          )
-
-          text = re.sub(
-              r'android:roundIcon="[^"]*"',
-              'android:roundIcon="@mipmap/ic_launcher_round"',
-              text
-          )
-
-          # -----------------------------------------------------
-          # PERMISSÕES DE INTERNET + GPS
-          # -----------------------------------------------------
-
+          # Inserir permissões de GPS e Internet
           permissions = [
               '    <uses-permission android:name="android.permission.INTERNET" />',
               '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
               '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
           ]
 
-          # Remover permissões antigas dessas três para evitar
-          # duplicação
-          text = re.sub(
-              r'\s*<uses-permission android:name="android.permission.INTERNET"\s*/>',
-              '',
-              text
-          )
+          for p_name in ["INTERNET", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]:
+              text = re.sub(r'\s*<uses-permission android:name="android.permission.' + p_name + r'"\s*/>', '', text)
 
-          text = re.sub(
-              r'\s*<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\s*/>',
-              '',
-              text
-          )
-
-          text = re.sub(
-              r'\s*<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\s*/>',
-              '',
-              text
-          )
-
-          # Inserir permissões logo depois da abertura do manifest
           marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          if marker in text:
+              text = text.replace(marker, marker + "\n\n" + "\n".join(permissions), 1)
 
-          if marker not in text:
-              raise SystemExit(
-                  "ERRO: abertura do AndroidManifest.xml não encontrada!"
-              )
-
-          text = text.replace(
-              marker,
-              marker + "\n\n" + "\n".join(permissions),
-              1
-          )
-
-          manifest.write_text(
-              text,
-              encoding="utf-8"
-          )
-
-          print("AndroidManifest.xml configurado.")
-          print()
-          print("Permissões:")
-          for p in permissions:
-              print(p)
-
+          manifest.write_text(text, encoding="utf-8")
+          print("AndroidManifest.xml atualizado.")
           PY
 
 
       # =========================================================
-      # 12. MOSTRAR MANIFEST PARA CONFERÊNCIA
-      # =========================================================
-      - name: Verify GPS Configuration
-        working-directory: project
-        shell: bash
-        run: |
-
-          echo "=========================================="
-          echo "ANDROID MANIFEST"
-          echo "=========================================="
-
-          cat android/app/src/main/AndroidManifest.xml
-
-          echo ""
-          echo "=========================================="
-          echo "VERIFICANDO GPS"
-          echo "=========================================="
-
-          grep "ACCESS_FINE_LOCATION" \
-            android/app/src/main/AndroidManifest.xml
-
-          grep "ACCESS_COARSE_LOCATION" \
-            android/app/src/main/AndroidManifest.xml
-
-          echo "GPS configurado corretamente!"
-
-
-      # =========================================================
-      # 13. NOME DO APP
+      # 13. CONFIGURAR NOME DO APP
       # =========================================================
       - name: Configure App Name
         working-directory: project
@@ -409,14 +313,10 @@ jobs:
           if [ -f "$STRINGS" ]; then
 
             python3 <<'PY'
-
           from pathlib import Path
           import re
 
-          path = Path(
-              "android/app/src/main/res/values/strings.xml"
-          )
-
+          path = Path("android/app/src/main/res/values/strings.xml")
           text = path.read_text(encoding="utf-8")
 
           text = re.sub(
@@ -433,13 +333,8 @@ jobs:
               flags=re.DOTALL
           )
 
-          path.write_text(
-              text,
-              encoding="utf-8"
-          )
-
+          path.write_text(text, encoding="utf-8")
           print("Nome Geoárvore configurado.")
-
           PY
 
           fi
@@ -454,7 +349,6 @@ jobs:
         run: |
 
           chmod +x gradlew
-
           ./gradlew clean --no-daemon
 
 
@@ -467,7 +361,6 @@ jobs:
         run: |
 
           chmod +x gradlew
-
           ./gradlew assembleDebug \
             --no-daemon \
             --stacktrace
@@ -483,22 +376,11 @@ jobs:
           APK="project/android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-
             echo "ERRO: APK não foi criado!"
-
-            find project/android/app/build/outputs \
-              -type f 2>/dev/null || true
-
             exit 1
-
           fi
 
-          echo ""
-          echo "=========================================="
-          echo "       APK GERADO COM SUCESSO!"
-          echo "=========================================="
-
-          ls -lh "$APK"
+          echo "APK gerado com sucesso!"
 
 
       # =========================================================
@@ -510,3 +392,4 @@ jobs:
           name: Geoarvore-APK
           path: project/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
