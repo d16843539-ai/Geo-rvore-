@@ -1,89 +1,71 @@
-name: Construir GeoÁrvore APK
+name: Construir APK GeoÁrvore
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - principal
       - main
-      - master
-  workflow_dispatch:
 
 jobs:
-  build:
+  construir:
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout
+      - name: Baixar código
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: '21'
 
-      - name: Setup Node
+      - name: Configurar Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
 
-      # =====================================================
-      # ENCONTRAR ZIP
-      # =====================================================
-
-      - name: Encontrar ZIP
+      - name: Procurar ZIP do aplicativo
         shell: bash
         run: |
-          echo "Arquivos encontrados:"
-          find . -maxdepth 2 -type f | sort
+          set -e
 
-          ZIP=""
-
-          if [ -f "GeoÁrvore.zip" ]; then
-            ZIP="GeoÁrvore.zip"
-          elif [ -f "GeoArvore.zip" ]; then
-            ZIP="GeoArvore.zip"
-          elif [ -f "GeoArvore_atualizado.zip" ]; then
-            ZIP="GeoArvore_atualizado.zip"
-          else
-            ZIP=$(find . -maxdepth 2 -type f \( -iname "Geo*Arvore*.zip" -o -iname "Geo*Árvore*.zip" \) | head -n 1)
-          fi
+          ZIP=$(find . -maxdepth 3 -type f \( \
+            -iname "*.zip" \
+            \) | head -n 1)
 
           if [ -z "$ZIP" ]; then
-            echo "ERRO: ZIP não encontrado."
+            echo "ERRO: nenhum arquivo ZIP encontrado."
+            echo "Arquivos encontrados:"
+            find . -maxdepth 3 -type f
             exit 1
           fi
 
-          echo "ZIP encontrado: $ZIP"
-          echo "PROJECT_ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "ZIP encontrado:"
+          echo "$ZIP"
 
-      # =====================================================
-      # EXTRAIR ZIP
-      # =====================================================
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
-      - name: Extrair projeto
+      - name: Extrair aplicativo
         shell: bash
         run: |
+          set -e
+
           rm -rf temp_extract
-          rm -rf project
-
           mkdir -p temp_extract
-          mkdir -p project
 
-          unzip -o "$PROJECT_ZIP" -d temp_extract
+          unzip -o "$ZIP" -d temp_extract
 
           echo "Conteúdo extraído:"
-          find temp_extract -maxdepth 5 -type f | sort
-
-      # =====================================================
-      # ENCONTRAR INDEX.HTML
-      # =====================================================
+          find temp_extract -maxdepth 4 -type f
 
       - name: Encontrar index.html
         shell: bash
         run: |
-          INDEX=$(find temp_extract -type f -name "index.html" -not -path "*/node_modules/*" | head -n 1)
+          set -e
+
+          INDEX=$(find temp_extract -type f -iname "index.html" | head -n 1)
 
           if [ -z "$INDEX" ]; then
             echo "ERRO: index.html não encontrado."
@@ -93,123 +75,91 @@ jobs:
           echo "index.html encontrado em:"
           echo "$INDEX"
 
-          SOURCE_DIR=$(dirname "$INDEX")
+          ROOT=$(dirname "$INDEX")
 
-          echo "Pasta do projeto:"
-          echo "$SOURCE_DIR"
+          echo "Pasta do aplicativo:"
+          echo "$ROOT"
 
-          cp -r "$SOURCE_DIR"/. project/
+          echo "APP_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      # =====================================================
-      # PREPARAR WWW
-      # =====================================================
-
-      - name: Preparar arquivos Web
-        working-directory: project
+      - name: Criar projeto Capacitor
         shell: bash
         run: |
-          rm -rf www
-          mkdir -p www
+          set -e
 
-          cp -r ./* www/ 2>/dev/null || true
-          cp -r ./.[!.]* www/ 2>/dev/null || true
+          rm -rf project
+          mkdir -p project
+          mkdir -p project/www
 
-          rm -rf www/www
-          rm -rf www/android
-          rm -rf www/node_modules
+          cp -R "$APP_ROOT"/. project/www/
 
-          if [ ! -f "www/index.html" ]; then
-            echo "ERRO: www/index.html não existe."
-            exit 1
-          fi
+          echo "Arquivos do aplicativo:"
+          find project/www -maxdepth 3 -type f
 
-          echo "Arquivos em www:"
-          find www -maxdepth 5 -type f | sort
-
-      # =====================================================
-      # CORRIGIR INDEX
-      # =====================================================
-
-      - name: Corrigir caminhos do index
-        working-directory: project
+      - name: Corrigir caminhos HTML
         shell: bash
         run: |
-          python3 - <<'PY'
+          set -e
+
+          python3 <<'PY'
           from pathlib import Path
           import re
 
-          path = Path("www/index.html")
+          html = Path("project/www/index.html")
 
-          content = path.read_text(encoding="utf-8")
+          if not html.exists():
+              raise SystemExit("index.html não encontrado")
 
-          content = re.sub(
-              r'<base\s+href\s*=\s*["\'][^"\']*["\']\s*/?>',
-              '<base href="./">',
-              content,
-              flags=re.IGNORECASE
-          )
+          text = html.read_text(encoding="utf-8")
 
-          if not re.search(r'<base\s+href=', content, re.IGNORECASE):
-              content = re.sub(
-                  r'(<head[^>]*>)',
-                  r'\1\n<base href="./">',
-                  content,
+          if "<base " not in text.lower():
+              text = re.sub(
+                  r"<head([^>]*)>",
+                  r'<head\1><base href="./">',
+                  text,
                   count=1,
-                  flags=re.IGNORECASE
+                  flags=re.I
               )
 
-          content = re.sub(
-              r'(\s(?:src|href)\s*=\s*["\'])/([^"\']+)',
-              r'\1\2',
-              content,
-              flags=re.IGNORECASE
+          text = re.sub(
+              r'((?:src|href)\s*=\s*["\'])/(?!/)',
+              r'\1',
+              text,
+              flags=re.I
           )
 
-          path.write_text(content, encoding="utf-8")
+          html.write_text(text, encoding="utf-8")
 
-          print("index.html corrigido.")
+          print("HTML corrigido.")
           PY
 
-      # =====================================================
-      # PACKAGE.JSON
-      # =====================================================
-
-      - name: Preparar NPM
-        working-directory: project
+      - name: Criar package.json
         shell: bash
+        working-directory: project
         run: |
-          if [ ! -f "package.json" ]; then
-            cat > package.json <<'EOF'
+          cat > package.json <<'EOF'
           {
             "name": "geoarvore",
             "version": "1.0.0",
             "private": true,
+            "scripts": {
+              "build": "echo build"
+            },
             "dependencies": {
-              "@capacitor/core": "^7.0.0",
-              "@capacitor/android": "^7.0.0",
-              "@capacitor/cli": "^7.0.0"
+              "@capacitor/core": "^7.4.3",
+              "@capacitor/android": "^7.4.3"
+            },
+            "devDependencies": {
+              "@capacitor/cli": "^7.4.3"
             }
           }
           EOF
-          fi
 
-          cat package.json
-
-      # =====================================================
-      # INSTALAR NPM
-      # =====================================================
-
-      - name: Instalar dependências
+      - name: Instalar Capacitor
         working-directory: project
-        shell: bash
-        run: |
-          npm install
+        run: npm install
 
-      # =====================================================
-      # CONFIGURAR CAPACITOR
-      # =====================================================
-
-      - name: Configurar Capacitor
+      - name: Criar configuração Capacitor
         working-directory: project
         shell: bash
         run: |
@@ -217,104 +167,97 @@ jobs:
           {
             "appId": "com.geoarvore.app",
             "appName": "GeoÁrvore",
-            "webDir": "www"
+            "webDir": "www",
+            "server": {
+              "androidScheme": "https"
+            }
           }
           EOF
 
-          cat capacitor.config.json
-
-      # =====================================================
-      # CRIAR ANDROID
-      # =====================================================
-
       - name: Criar Android
         working-directory: project
-        shell: bash
         run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-
-      # =====================================================
-      # SINCRONIZAR CAPACITOR
-      # =====================================================
+          npx cap add android
 
       - name: Sincronizar Capacitor
         working-directory: project
-        shell: bash
         run: |
           npx cap sync android
 
-      # =====================================================
-      # VERIFICAR INDEX DENTRO DO ANDROID
-      # =====================================================
-
       - name: Verificar arquivos Android
+        working-directory: project
+        run: |
+          echo "Manifest antes das alterações:"
+          cat android/app/src/main/AndroidManifest.xml
+
+          echo ""
+          echo "index.html:"
+          ls -lh android/app/src/main/assets/public/index.html
+
+      - name: Corrigir AndroidManifest
         working-directory: project
         shell: bash
         run: |
-          echo "Procurando index.html dentro do Android..."
+          set -e
 
-          find android/app/src/main/assets -type f | sort | head -100
+          cat > android/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-          if [ ! -f "android/app/src/main/assets/public/index.html" ]; then
-            echo "ERRO: index.html não chegou ao Android."
-            exit 1
-          fi
+              <uses-permission android:name="android.permission.INTERNET" />
 
-          echo "index.html encontrado no Android."
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-      # =====================================================
-      # GPS
-      # =====================================================
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-      - name: Configurar GPS
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name="com.getcapacitor.BridgeActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          echo "Manifest corrigido:"
+          cat android/app/src/main/AndroidManifest.xml
+
+      - name: Verificar XML do Manifest
         working-directory: project
         shell: bash
         run: |
           python3 - <<'PY'
-          from pathlib import Path
+          import xml.etree.ElementTree as ET
 
-          path = Path("android/app/src/main/AndroidManifest.xml")
+          path = "android/app/src/main/AndroidManifest.xml"
 
-          text = path.read_text(encoding="utf-8")
-
-          permissions = [
-              "android.permission.INTERNET",
-              "android.permission.ACCESS_FINE_LOCATION",
-              "android.permission.ACCESS_COARSE_LOCATION"
-          ]
-
-          for permission in permissions:
-              tag = f'<uses-permission android:name="{permission}" />'
-
-              if permission not in text:
-                  position = text.find(">")
-
-                  text = (
-                      text[:position + 1]
-                      + "\n    "
-                      + tag
-                      + text[position + 1:]
-                  )
-
-          if "android:usesCleartextTraffic" not in text:
-              text = text.replace(
-                  "<application",
-                  '<application android:usesCleartextTraffic="true"',
-                  1
-              )
-
-          path.write_text(text, encoding="utf-8")
-
-          print("GPS configurado.")
+          try:
+              ET.parse(path)
+              print("AndroidManifest.xml válido.")
+          except Exception as e:
+              print("ERRO no AndroidManifest.xml:")
+              print(e)
+              raise
           PY
 
-      # =====================================================
-      # ÍCONE
-      # =====================================================
-
-      - name: Configurar ícone
+      - name: Copiar ícone
         working-directory: project
         shell: bash
         run: |
@@ -322,104 +265,37 @@ jobs:
 
           if [ -f "www/planta-cobra.png" ]; then
             ICON="www/planta-cobra.png"
-          elif [ -f "planta-cobra.png" ]; then
-            ICON="planta-cobra.png"
+          elif [ -f "www/planta-cobra.PNG" ]; then
+            ICON="www/planta-cobra.PNG"
           fi
 
           if [ -n "$ICON" ]; then
-            RES="android/app/src/main/res"
+            echo "Ícone encontrado: $ICON"
 
-            mkdir -p "$RES/mipmap-mdpi"
-            mkdir -p "$RES/mipmap-hdpi"
-            mkdir -p "$RES/mipmap-xhdpi"
-            mkdir -p "$RES/mipmap-xxhdpi"
-            mkdir -p "$RES/mipmap-xxxhdpi"
+            mkdir -p android/app/src/main/res/drawable
 
-            rm -rf "$RES/mipmap-anydpi-v26"
-
-            for DIR in \
-              mipmap-mdpi \
-              mipmap-hdpi \
-              mipmap-xhdpi \
-              mipmap-xxhdpi \
-              mipmap-xxxhdpi
-            do
-              cp "$ICON" "$RES/$DIR/ic_launcher.png"
-              cp "$ICON" "$RES/$DIR/ic_launcher_round.png"
-            done
-
-            echo "Ícone aplicado."
+            cp "$ICON" android/app/src/main/res/drawable/geoarvore_icon.png
           else
-            echo "planta-cobra.png não encontrado."
+            echo "Ícone personalizado não encontrado."
           fi
 
-      # =====================================================
-      # MANIFEST
-      # =====================================================
-
-      - name: Configurar Manifest
-        working-directory: project
-        shell: bash
+      - name: Limpar projeto
+        working-directory: project/android
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+          chmod +x gradlew
+          ./gradlew clean
 
-          path = Path("android/app/src/main/AndroidManifest.xml")
-
-          text = path.read_text(encoding="utf-8")
-
-          text = re.sub(
-              r'android:icon="[^"]*"',
-              'android:icon="@mipmap/ic_launcher"',
-              text
-          )
-
-          text = re.sub(
-              r'android:roundIcon="[^"]*"',
-              'android:roundIcon="@mipmap/ic_launcher_round"',
-              text
-          )
-
-          path.write_text(text, encoding="utf-8")
-
-          print("Manifest configurado.")
-          PY
-
-      # =====================================================
-      # COMPILAR APK
-      # =====================================================
-
-      - name: Compilar APK
+      - name: Construir APK
         working-directory: project/android
         shell: bash
         run: |
           chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-          ./gradlew clean --no-daemon
-
-          ./gradlew assembleDebug --no-daemon --stacktrace
-
-      # =====================================================
-      # VERIFICAR APK
-      # =====================================================
-
-      - name: Verificar APK
+      - name: Procurar APK
         shell: bash
         run: |
-          APK="project/android/app/build/outputs/apk/debug/app-debug.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERRO: APK não foi criado."
-            exit 1
-          fi
-
-          echo "APK criado:"
-          ls -lh "$APK"
-
-      # =====================================================
-      # ENVIAR APK
-      # =====================================================
+          find project/android -type f -name "*.apk" -print
 
       - name: Enviar APK
         uses: actions/upload-artifact@v4
