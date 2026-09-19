@@ -1,410 +1,225 @@
-name: GeoÁrvore APK
+name: Gerar APK GeoArvore
 
 on:
   workflow_dispatch:
-
-  push:
-    branches:
-      - main
-      - master
-      - principal
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-
-      # ==========================================
-      # 1. BAIXAR O REPOSITÓRIO
-      # ==========================================
-
-      - name: Checkout
+      - name: Baixar código
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # 2. JAVA
-      # ==========================================
 
       - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
-
-
-      # ==========================================
-      # 3. NODE
-      # ==========================================
+          java-version: '21'
 
       - name: Configurar Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
 
-
-      # ==========================================
-      # 4. ENCONTRAR O ZIP
-      # ==========================================
-
-      - name: Encontrar GeoArvore.zip
+      - name: Preparar projeto
         shell: bash
         run: |
+          set -e
 
-          ZIP=""
+          echo "=== Procurando ZIP ==="
+
+          ZIP_FILE=""
 
           if [ -f "GeoArvore.zip" ]; then
-            ZIP="GeoArvore.zip"
-
+            ZIP_FILE="GeoArvore.zip"
           elif [ -f "GeoÁrvore.zip" ]; then
-            ZIP="GeoÁrvore.zip"
-
-          else
-            ZIP=$(find . -maxdepth 1 -type f \
-              \( -iname "GeoArvore*.zip" -o -iname "GeoÁrvore*.zip" \) \
-              | head -n 1)
+            ZIP_FILE="GeoÁrvore.zip"
           fi
 
-          if [ -z "$ZIP" ]; then
+          if [ -z "$ZIP_FILE" ]; then
             echo "ERRO: GeoArvore.zip não encontrado."
             exit 1
           fi
 
-          echo "ZIP encontrado: $ZIP"
-
-          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
-
-
-      # ==========================================
-      # 5. EXTRAIR ZIP
-      # ==========================================
-
-      - name: Extrair ZIP
-        shell: bash
-        run: |
+          echo "ZIP encontrado: $ZIP_FILE"
 
           rm -rf projeto
-
           mkdir projeto
 
-          unzip -o "$ZIP" -d projeto
+          unzip -o "$ZIP_FILE" -d projeto
 
-          echo ""
-          echo "Arquivos extraídos:"
+          echo "=== Conteúdo extraído ==="
           find projeto -maxdepth 2 -type f | sort
 
-
-      # ==========================================
-      # 6. VERIFICAR HTML CORRETO
-      # ==========================================
-
-      - name: Verificar HTML principal
+      - name: Verificar HTML correto
         shell: bash
         run: |
+          set -e
 
-          HTML="projeto/index.html"
-
-          if [ ! -f "$HTML" ]; then
+          if [ ! -f "projeto/index.html" ]; then
             echo "ERRO: projeto/index.html não encontrado."
             exit 1
           fi
 
-          echo "HTML encontrado."
+          echo "=== HTML PRINCIPAL ==="
+          ls -lh projeto/index.html
 
-          echo ""
-          echo "Tamanho:"
-          wc -c "$HTML"
+          echo "=== Verificando GPS ==="
 
-          echo ""
-          echo "Verificando GPS..."
-
-          if grep -q "getCurrentPosition" "$HTML"; then
-            echo "GPS encontrado!"
+          if grep -q "getCurrentPosition" "projeto/index.html"; then
+            echo "GPS encontrado no HTML principal."
           else
-            echo "AVISO: getCurrentPosition não encontrado."
+            echo "AVISO: GPS não encontrado no HTML principal."
           fi
 
-
-      # ==========================================
-      # 7. CRIAR PROJETO NOVO
-      # ==========================================
-
-      - name: Criar projeto limpo
+      - name: Criar projeto Capacitor
         shell: bash
         run: |
+          set -e
 
           rm -rf app
+          mkdir app
 
-          mkdir -p app/www
-
-
-      # ==========================================
-      # 8. COPIAR O HTML CORRETO
-      # ==========================================
-
-      - name: Copiar aplicação
-        shell: bash
-        run: |
-
-          # IMPORTANTE:
-          # NÃO usamos projeto/www/index.html
-          #
-          # Usamos SOMENTE:
-          #
-          # projeto/index.html
-
-          cp "projeto/index.html" \
-             "app/www/index.html"
-
-          echo "index.html correto copiado."
-
-          wc -c app/www/index.html
-
-
-      # ==========================================
-      # 9. COPIAR MANIFEST.JSON
-      # ==========================================
-
-      - name: Copiar manifest
-        shell: bash
-        run: |
-
-          if [ -f "projeto/manifest.json" ]; then
-
-            cp "projeto/manifest.json" \
-               "app/www/manifest.json"
-
-            echo "manifest.json copiado."
-
-          else
-
-            echo "manifest.json não encontrado."
-            echo "Criando um manifest básico..."
-
-            cat > app/www/manifest.json <<'EOF'
-{
-  "name": "GeoÁrvore",
-  "short_name": "GeoÁrvore",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000"
-}
-EOF
-
-          fi
-
-
-      # ==========================================
-      # 10. COPIAR PLANTA
-      # ==========================================
-
-      - name: Copiar planta-cobra.png
-        shell: bash
-        run: |
-
-          if [ -f "planta-cobra.png" ]; then
-
-            cp "planta-cobra.png" \
-               "app/www/planta-cobra.png"
-
-          elif [ -f "projeto/planta-cobra.png" ]; then
-
-            cp "projeto/planta-cobra.png" \
-               "app/www/planta-cobra.png"
-
-          elif [ -f "projeto/www/planta-cobra.png" ]; then
-
-            cp "projeto/www/planta-cobra.png" \
-               "app/www/planta-cobra.png"
-
-          else
-
-            echo "ERRO: planta-cobra.png não encontrada."
-            exit 1
-
-          fi
-
-          echo "Ícone copiado."
-
-          file app/www/planta-cobra.png
-
-
-      # ==========================================
-      # 11. CRIAR PACKAGE.JSON
-      # ==========================================
-
-      - name: Criar package.json
-        working-directory: app
-        shell: bash
-        run: |
+          cd app
 
           cat > package.json <<'EOF'
-{
-  "name": "geoarvore",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {},
-  "dependencies": {
-    "@capacitor/core": "^8.5.2",
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^8.5.2"
-  }
-}
-EOF
-
-
-      # ==========================================
-      # 12. INSTALAR CAPACITOR
-      # ==========================================
-
-      - name: Instalar Capacitor
-        working-directory: app
-        shell: bash
-        run: |
+          {
+            "name": "geoarvore",
+            "version": "1.0.0",
+            "private": true,
+            "scripts": {},
+            "dependencies": {
+              "@capacitor/core": "^8.5.2",
+              "@capacitor/android": "^8.5.2",
+              "@capacitor/cli": "^8.5.2"
+            }
+          }
+          EOF
 
           npm install
 
+          mkdir -p www
 
-      # ==========================================
-      # 13. CONFIGURAR CAPACITOR
-      # ==========================================
+          cp ../projeto/index.html www/index.html
 
-      - name: Criar capacitor.config.json
-        working-directory: app
-        shell: bash
-        run: |
+          if [ -f "../projeto/manifest.json" ]; then
+            cp ../projeto/manifest.json www/manifest.json
+          fi
 
           cat > capacitor.config.json <<'EOF'
-{
-  "appId": "com.geoarvores.app",
-  "appName": "GeoÁrvore",
-  "webDir": "www"
-}
-EOF
-
-
-      # ==========================================
-      # 14. CRIAR ANDROID NOVO
-      # ==========================================
-
-      - name: Criar Android
-        working-directory: app
-        shell: bash
-        run: |
+          {
+            "appId": "com.geoarvores.app",
+            "appName": "GeoÁrvore",
+            "webDir": "www"
+          }
+          EOF
 
           npx cap add android
 
-
-      # ==========================================
-      # 15. SINCRONIZAR
-      # ==========================================
-
-      - name: Sincronizar
-        working-directory: app
+      - name: Colocar HTML correto no Android
         shell: bash
         run: |
+          set -e
+
+          cd app
+
+          mkdir -p android/app/src/main/assets/public
+
+          cp www/index.html android/app/src/main/assets/public/index.html
+
+          if [ -f "www/manifest.json" ]; then
+            cp www/manifest.json android/app/src/main/assets/public/manifest.json
+          fi
+
+          echo "=== HTML FINAL DENTRO DO APK ==="
+          ls -lh android/app/src/main/assets/public/index.html
+
+          echo "=== Verificação ==="
+
+          if grep -q "getCurrentPosition" android/app/src/main/assets/public/index.html; then
+            echo "GPS presente no HTML final."
+          else
+            echo "AVISO: GPS não encontrado."
+          fi
+
+      - name: Sincronizar Capacitor
+        shell: bash
+        run: |
+          set -e
+
+          cd app
 
           npx cap sync android
 
-
-      # ==========================================
-      # 16. GARANTIR HTML CORRETO
-      # ==========================================
-
-      - name: Garantir HTML correto no Android
-        working-directory: app
+      - name: Configurar permissões GPS
         shell: bash
         run: |
+          set -e
 
-          PUBLIC="android/app/src/main/assets/public"
+          MANIFEST="app/android/app/src/main/AndroidManifest.xml"
 
-          rm -rf "$PUBLIC"
+          python3 - "$MANIFEST" <<'PY'
+          import sys
 
-          mkdir -p "$PUBLIC"
+          path = sys.argv[1]
 
-          cp -R www/. "$PUBLIC/"
+          with open(path, "r", encoding="utf-8") as f:
+              text = f.read()
 
-          echo ""
-          echo "HTML FINAL DENTRO DO APK:"
-          wc -c "$PUBLIC/index.html"
+          permissions = [
+              '    <uses-permission android:name="android.permission.INTERNET" />',
+              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
+          ]
 
-          echo ""
-          echo "GPS:"
-          grep -n "getCurrentPosition" \
-            "$PUBLIC/index.html" || true
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace(
+                      '<manifest ',
+                      '<manifest ',
+                      1
+                  )
 
+                  position = text.find('>')
 
-      # ==========================================
-      # 17. PERMISSÕES GPS
-      # ==========================================
+                  if position != -1:
+                      text = (
+                          text[:position + 1]
+                          + '\n'
+                          + permission
+                          + text[position + 1:]
+                      )
 
-      - name: Configurar GPS
-        working-directory: app
-        shell: bash
-        run: |
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(text)
 
-          python3 <<'PY'
-
-from pathlib import Path
-
-path = Path(
-    "android/app/src/main/AndroidManifest.xml"
-)
-
-text = path.read_text(
-    encoding="utf-8"
-)
-
-marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
-
-if marker not in text:
-    raise SystemExit("Manifest não encontrado.")
-
-# Evitar duplicação
-for permission in [
-    '<uses-permission android:name="android.permission.INTERNET" />',
-    '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
-    '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
-]:
-    text = text.replace(permission, "")
-
-permissions = """
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-"""
-
-text = text.replace(
-    marker,
-    marker + permissions,
-    1
-)
-
-path.write_text(
-    text,
-    encoding="utf-8"
-)
-
-print("Permissões GPS adicionadas.")
-
-PY
-
-
-      # ==========================================
-      # 18. CONFIGURAR ÍCONE
-      # ==========================================
+          print(text)
+          PY
 
       - name: Configurar ícone
-        working-directory: app
         shell: bash
         run: |
+          set -e
 
-          RES="android/app/src/main/res"
+          ICON=""
 
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
-          rm -f "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+          if [ -f "planta-cobra.png" ]; then
+            ICON="planta-cobra.png"
+          elif [ -f "projeto/planta-cobra.png" ]; then
+            ICON="projeto/planta-cobra.png"
+          elif [ -f "projeto/www/planta-cobra.png" ]; then
+            ICON="projeto/www/planta-cobra.png"
+          fi
+
+          if [ -z "$ICON" ]; then
+            echo "ERRO: planta-cobra.png não encontrada."
+            exit 1
+          fi
+
+          echo "Ícone encontrado: $ICON"
+
+          RES="app/android/app/src/main/res"
 
           mkdir -p "$RES/mipmap-mdpi"
           mkdir -p "$RES/mipmap-hdpi"
@@ -412,113 +227,51 @@ PY
           mkdir -p "$RES/mipmap-xxhdpi"
           mkdir -p "$RES/mipmap-xxxhdpi"
 
-          for DIR in \
-            mipmap-mdpi \
-            mipmap-hdpi \
-            mipmap-xhdpi \
-            mipmap-xxhdpi \
-            mipmap-xxxhdpi
-          do
+          cp "$ICON" "$RES/mipmap-mdpi/ic_launcher.png"
+          cp "$ICON" "$RES/mipmap-hdpi/ic_launcher.png"
+          cp "$ICON" "$RES/mipmap-xhdpi/ic_launcher.png"
+          cp "$ICON" "$RES/mipmap-xxhdpi/ic_launcher.png"
+          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_launcher.png"
 
-            cp www/planta-cobra.png \
-              "$RES/$DIR/ic_launcher.png"
+          cp "$ICON" "$RES/mipmap-mdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-hdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-xhdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-xxhdpi/ic_launcher_round.png"
+          cp "$ICON" "$RES/mipmap-xxxhdpi/ic_launcher_round.png"
 
-            cp www/planta-cobra.png \
-              "$RES/$DIR/ic_launcher_round.png"
-
-          done
+          rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml"
+          rm -f "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
           echo "Ícone configurado."
 
-
-      # ==========================================
-      # 19. CONFERÊNCIA FINAL
-      # ==========================================
-
-      - name: Conferir projeto final
-        working-directory: app
-        shell: bash
-        run: |
-
-          echo "======================================"
-          echo "HTML"
-          echo "======================================"
-
-          wc -c www/index.html
-
-          echo ""
-          echo "======================================"
-          echo "GPS"
-          echo "======================================"
-
-          grep -n "getCurrentPosition" \
-            www/index.html || true
-
-          echo ""
-          echo "======================================"
-          echo "MANIFEST"
-          echo "======================================"
-
-          grep "LOCATION" \
-            android/app/src/main/AndroidManifest.xml
-
-          echo ""
-          echo "======================================"
-          echo "ARQUIVOS WEB"
-          echo "======================================"
-
-          find www -maxdepth 2 -type f -printf "%p\n"
-
-
-      # ==========================================
-      # 20. COMPILAR
-      # ==========================================
-
       - name: Compilar APK
-        working-directory: app/android
         shell: bash
         run: |
+          set -e
+
+          cd app/android
 
           chmod +x gradlew
 
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace
-
-
-      # ==========================================
-      # 21. VERIFICAR APK
-      # ==========================================
+          ./gradlew assembleDebug --stacktrace
 
       - name: Verificar APK
         shell: bash
         run: |
+          set -e
 
           APK="app/android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-
-            echo "ERRO: APK não encontrado."
-
+            echo "ERRO: APK não foi gerado."
             exit 1
-
           fi
 
-          echo ""
-          echo "======================================"
-          echo "APK CRIADO!"
-          echo "======================================"
-
+          echo "=== APK GERADO ==="
           ls -lh "$APK"
-
-
-      # ==========================================
-      # 22. DISPONIBILIZAR APK
-      # ==========================================
 
       - name: Enviar APK
         uses: actions/upload-artifact@v4
         with:
           name: Geoarvore-APK
           path: app/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
